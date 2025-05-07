@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Grid cell base styles */
+  .grid-cell {
+    @apply px-3 py-2 text-sm transition-colors duration-150;
+  }
+  
+  /* Editable cell styles */
+  .editable-cell {
+    @apply bg-blue-50/30 hover:bg-blue-100/50 cursor-pointer;
+  }
+  
+  /* Focused editable cell */
+  .editable-cell:focus-within {
+    @apply bg-blue-100/70 outline-none ring-2 ring-blue-500/50;
+  }
+  
+  /* Read-only cell */
+  .read-only-cell {
+    @apply bg-transparent cursor-default;
+  }
+  
+  /* Tab-specific editable cell styles */
+  .tab-inventory .editable-cell,
+  .tab-enter_identify .editable-cell,
+  .tab-price_verify .editable-cell,
+  .tab-depreciation .editable-cell,
+  .tab-recovery .editable-cell {
+    @apply bg-blue-50/30 hover:bg-blue-100/50;
+  }
+
+  /* Grid cell styles */
+  .grid-cell {
+    @apply px-3 py-2 text-sm;
+  }
+  
+  /* Editable cell styles */
+  .editable-cell {
+    @apply bg-blue-50/30 hover:bg-blue-100/50 cursor-pointer transition-colors;
+  }
+  
+  /* Active tab editable cell */
+  .active-tab .editable-cell {
+    @apply bg-blue-50/50 hover:bg-blue-100/70;
+  }
+  
+  /* Read-only cell */
+  .read-only-cell {
+    @apply bg-transparent cursor-default;
+  }
+  
+  /* Hover state for editable cells */
+  .editable-cell:hover {
+    @apply bg-blue-100/50;
+  }
+  
+  /* Focus state for editable cells */
+  .editable-cell:focus-within {
+    @apply bg-blue-100/70 outline-none ring-2 ring-blue-500/50;
+  }
+}
+
+@layer components {
+  .auth-container {
+    @apply w-full;
+  }
+
+  .auth-button {
+    @apply w-full bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark transition-colors;
+  }
+
+  .auth-input {
+    @apply w-full border border-border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+  }
+}
