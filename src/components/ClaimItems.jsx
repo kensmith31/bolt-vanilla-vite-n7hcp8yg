@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
-import { Dialog, Transition } from '@headlessui/react';
-import { Fragment } from 'react';
-import toast, { Toaster } from 'react-hot-toast';
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
+import { PlusIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { Dialog, Transition } from "@headlessui/react";
+import { Fragment } from "react";
+import toast, { Toaster } from "react-hot-toast";
 
 export function ClaimItems({ claimId }) {
   const [items, setItems] = useState([]);
@@ -13,15 +13,15 @@ export function ClaimItems({ claimId }) {
   const [editingItem, setEditingItem] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [formData, setFormData] = useState({
-    description: '',
-    category: '',
-    room: '',
+    description: "",
+    category: "",
+    room: "",
     quantity: 1,
-    claimed_rcv: '',
-    age: '',
-    condition: 'good',
-    comparable_link: '',
-    adjuster_notes: '',
+    claimed_rcv: "",
+    age: "",
+    condition: "good",
+    comparable_link: "",
+    adjuster_notes: "",
   });
 
   useEffect(() => {
@@ -31,20 +31,22 @@ export function ClaimItems({ claimId }) {
 
   async function fetchCurrentUser() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', user.id)
+        .from("users")
+        .select("*")
+        .eq("id", user.id)
         .single();
 
       if (userError) throw userError;
       setCurrentUser(userData);
     } catch (err) {
-      console.error('Error fetching current user:', err);
-      toast.error('Failed to load user data');
+      console.error("Error fetching current user:", err);
+      toast.error("Failed to load user data");
     }
   }
 
@@ -52,15 +54,15 @@ export function ClaimItems({ claimId }) {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('items')
-        .select('*')
-        .eq('claim_id', claimId)
-        .order('item_number', { ascending: true });
+        .from("items")
+        .select("*")
+        .eq("claim_id", claimId)
+        .order("item_number", { ascending: true });
 
       if (error) throw error;
       setItems(data || []);
     } catch (err) {
-      console.error('Error fetching items:', err);
+      console.error("Error fetching items:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -71,104 +73,141 @@ export function ClaimItems({ claimId }) {
     setEditingItem(item);
     setFormData({
       description: item.description,
-      category: item.category || '',
-      room: item.room || '',
+      category: item.category || "",
+      room: item.room || "",
       quantity: item.quantity || 1,
-      claimed_rcv: item.claimed_rcv || '',
-      age: item.age || '',
-      condition: item.condition || 'good',
-      comparable_link: item.comparable_link || '',
-      adjuster_notes: item.adjuster_notes || '',
+      claimed_rcv: item.claimed_rcv || "",
+      age: item.age || "",
+      condition: item.condition || "good",
+      comparable_link: item.comparable_link || "",
+      adjuster_notes: item.adjuster_notes || "",
     });
     setIsModalOpen(true);
   };
 
   const handleDelete = async (itemId) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) {
+    if (!window.confirm("Are you sure you want to delete this item?")) {
       return;
     }
 
     try {
-      const { error } = await supabase
-        .from('items')
+      // First delete related records in item_change_history
+      const { error: historyError } = await supabase
+        .from("item_change_history")
         .delete()
-        .eq('id', itemId);
+        .eq("item_id", itemId);
+
+      if (historyError) {
+        console.error("Error deleting item history:", historyError);
+        toast.error("Failed to delete item history: " + historyError.message);
+        return;
+      }
+
+      // Also delete any messages related to this item
+      const { error: messagesError } = await supabase
+        .from("messages")
+        .delete()
+        .eq("item_id", itemId);
+
+      if (messagesError) {
+        console.error("Error deleting item messages:", messagesError);
+        // Continue with deletion even if messages deletion fails
+      }
+
+      // Then delete the item itself
+      const { error } = await supabase.from("items").delete().eq("id", itemId);
 
       if (error) throw error;
 
-      setItems(items.filter(item => item.id !== itemId));
-      toast.success('Item deleted successfully');
+      setItems(items.filter((item) => item.id !== itemId));
+      toast.success("Item deleted successfully");
     } catch (err) {
-      console.error('Error deleting item:', err);
-      toast.error('Failed to delete item: ' + err.message);
+      console.error("Error deleting item:", err);
+      toast.error("Failed to delete item: " + err.message);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       if (!currentUser) {
-        throw new Error('No user found');
+        throw new Error("No user found");
       }
 
       // Get the claim's default tax rate
       const { data: claimData, error: claimError } = await supabase
-        .from('claims')
-        .select('default_tax_rate')
-        .eq('file_number', claimId)
+        .from("claims")
+        .select("default_tax_rate")
+        .eq("file_number", claimId)
         .single();
 
       if (claimError) throw claimError;
+
+      // Get user's full name for change history
+      const userName =
+        `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim() ||
+        "Unknown User";
 
       const itemData = {
         ...formData,
         claim_id: claimId,
         quantity: parseFloat(formData.quantity),
-        claimed_rcv: formData.claimed_rcv ? parseFloat(formData.claimed_rcv) : null,
+        claimed_rcv: formData.claimed_rcv
+          ? parseFloat(formData.claimed_rcv)
+          : null,
         age: formData.age ? parseFloat(formData.age) : null,
-        tax_rate: claimData.default_tax_rate ? parseFloat(claimData.default_tax_rate) / 100 : null,
+        tax_rate: claimData.default_tax_rate
+          ? parseFloat(claimData.default_tax_rate) / 100
+          : null,
         submitted_by: currentUser.role,
+        user_id: currentUser.id,
+        updated_at: new Date().toISOString(),
       };
 
       if (editingItem) {
         // Update existing item
         const { error } = await supabase
-          .from('items')
+          .from("items")
           .update(itemData)
-          .eq('id', editingItem.id);
+          .eq("id", editingItem.id);
 
         if (error) throw error;
-        toast.success('Item updated successfully');
+        toast.success("Item updated successfully");
       } else {
         // Create new item
-        const { error } = await supabase
-          .from('items')
-          .insert([itemData]);
+        const { error } = await supabase.from("items").insert([
+          {
+            ...itemData,
+            created_at: new Date().toISOString(),
+          },
+        ]);
 
         if (error) throw error;
-        toast.success('Item created successfully');
+        toast.success("Item created successfully");
       }
 
       setIsModalOpen(false);
       fetchItems();
-      
+
       // Reset form
       setFormData({
-        description: '',
-        category: '',
-        room: '',
+        description: "",
+        category: "",
+        room: "",
         quantity: 1,
-        claimed_rcv: '',
-        age: '',
-        condition: 'good',
-        comparable_link: '',
-        adjuster_notes: '',
+        claimed_rcv: "",
+        age: "",
+        condition: "good",
+        comparable_link: "",
+        adjuster_notes: "",
       });
       setEditingItem(null);
     } catch (err) {
-      console.error('Error saving item:', err);
-      toast.error(`Failed to ${editingItem ? 'update' : 'create'} item: ${err.message}`);
+      console.error("Error saving item:", err);
+      toast.error(
+        `Failed to ${editingItem ? "update" : "create"} item: ${err.message}`,
+      );
     }
   };
 
@@ -200,15 +239,15 @@ export function ClaimItems({ claimId }) {
           onClick={() => {
             setEditingItem(null);
             setFormData({
-              description: '',
-              category: '',
-              room: '',
+              description: "",
+              category: "",
+              room: "",
               quantity: 1,
-              claimed_rcv: '',
-              age: '',
-              condition: 'good',
-              comparable_link: '',
-              adjuster_notes: '',
+              claimed_rcv: "",
+              age: "",
+              condition: "good",
+              comparable_link: "",
+              adjuster_notes: "",
             });
             setIsModalOpen(true);
           }}
@@ -223,25 +262,46 @@ export function ClaimItems({ claimId }) {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Item #
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Description
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Category
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Room
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Quantity
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Claimed RCV
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Actions
                 </th>
               </tr>
@@ -256,16 +316,16 @@ export function ClaimItems({ claimId }) {
                     {item.description}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {item.category || '-'}
+                    {item.category || "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {item.room || '-'}
+                    {item.room || "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {item.quantity}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {item.claimed_rcv ? `$${item.claimed_rcv.toFixed(2)}` : '-'}
+                    {item.claimed_rcv ? `$${item.claimed_rcv.toFixed(2)}` : "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex space-x-2">
@@ -325,7 +385,7 @@ export function ClaimItems({ claimId }) {
                     as="h3"
                     className="text-lg font-medium leading-6 text-gray-900 mb-4"
                   >
-                    {editingItem ? 'Edit Item' : 'Add New Item'}
+                    {editingItem ? "Edit Item" : "Add New Item"}
                   </Dialog.Title>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
@@ -337,7 +397,12 @@ export function ClaimItems({ claimId }) {
                         required
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            description: e.target.value,
+                          })
+                        }
                       />
                     </div>
                     <div>
@@ -348,7 +413,9 @@ export function ClaimItems({ claimId }) {
                         type="text"
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         value={formData.category}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, category: e.target.value })
+                        }
                       />
                     </div>
                     <div>
@@ -359,7 +426,9 @@ export function ClaimItems({ claimId }) {
                         type="text"
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         value={formData.room}
-                        onChange={(e) => setFormData({ ...formData, room: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, room: e.target.value })
+                        }
                       />
                     </div>
                     <div>
@@ -373,7 +442,9 @@ export function ClaimItems({ claimId }) {
                         required
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         value={formData.quantity}
-                        onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, quantity: e.target.value })
+                        }
                       />
                     </div>
                     <div>
@@ -386,7 +457,12 @@ export function ClaimItems({ claimId }) {
                         step="0.01"
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         value={formData.claimed_rcv}
-                        onChange={(e) => setFormData({ ...formData, claimed_rcv: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            claimed_rcv: e.target.value,
+                          })
+                        }
                       />
                     </div>
                     <div>
@@ -399,7 +475,9 @@ export function ClaimItems({ claimId }) {
                         step="0.1"
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         value={formData.age}
-                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, age: e.target.value })
+                        }
                       />
                     </div>
                     <div>
@@ -409,7 +487,12 @@ export function ClaimItems({ claimId }) {
                       <select
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         value={formData.condition}
-                        onChange={(e) => setFormData({ ...formData, condition: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            condition: e.target.value,
+                          })
+                        }
                       >
                         <option value="poor">Poor</option>
                         <option value="fair">Fair</option>
@@ -425,7 +508,12 @@ export function ClaimItems({ claimId }) {
                         type="url"
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         value={formData.comparable_link}
-                        onChange={(e) => setFormData({ ...formData, comparable_link: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            comparable_link: e.target.value,
+                          })
+                        }
                       />
                     </div>
                     <div>
@@ -436,7 +524,12 @@ export function ClaimItems({ claimId }) {
                         rows={3}
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                         value={formData.adjuster_notes}
-                        onChange={(e) => setFormData({ ...formData, adjuster_notes: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            adjuster_notes: e.target.value,
+                          })
+                        }
                       />
                     </div>
                     <div className="mt-6 flex justify-end space-x-3">
@@ -454,7 +547,7 @@ export function ClaimItems({ claimId }) {
                         type="submit"
                         className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
                       >
-                        {editingItem ? 'Update Item' : 'Add Item'}
+                        {editingItem ? "Update Item" : "Add Item"}
                       </button>
                     </div>
                   </form>

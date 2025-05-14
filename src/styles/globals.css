@@ -4,68 +4,115 @@
 
 @layer base {
   body {
-    @apply bg-background;
-    margin: 0;
-    padding: 0;
+    @apply bg-background m-0 p-0;
   }
 
-  /* Grid cell base styles */
-  .grid-cell {
-    @apply px-3 py-2 text-sm transition-colors duration-150;
-  }
-  
-  /* Editable cell styles */
-  .editable-cell {
-    @apply bg-blue-50/30 hover:bg-blue-100/50 cursor-pointer;
-  }
-  
-  /* Focused editable cell */
-  .editable-cell:focus-within {
-    @apply bg-blue-100/70 outline-none ring-2 ring-blue-500/50;
-  }
-  
-  /* Read-only cell */
-  .read-only-cell {
-    @apply bg-transparent cursor-default;
-  }
-  
-  /* Tab-specific editable cell styles */
-  .tab-inventory .editable-cell,
-  .tab-enter_identify .editable-cell,
-  .tab-price_verify .editable-cell,
-  .tab-depreciation .editable-cell,
-  .tab-recovery .editable-cell {
-    @apply bg-blue-50/30 hover:bg-blue-100/50;
+  /* Table row base styling */
+  tr {
+    @apply border-b-2 border-gray-200;
   }
 
   /* Grid cell styles */
   .grid-cell {
-    @apply px-3 py-2 text-sm;
+    @apply px-3 py-2 text-sm border-b border-gray-700 transition-colors duration-150;
   }
-  
+
   /* Editable cell styles */
   .editable-cell {
-    @apply bg-blue-50/30 hover:bg-blue-100/50 cursor-pointer transition-colors;
+    @apply bg-blue-50/50 hover:bg-gray-100/70 cursor-pointer transition-colors;
   }
-  
-  /* Active tab editable cell */
-  .active-tab .editable-cell {
-    @apply bg-blue-50/50 hover:bg-blue-100/70;
+
+  .editable-cell:focus-within {
+    @apply bg-gray-100/70 outline-none ring-1 ring-blue-500/50;
   }
-  
-  /* Read-only cell */
-  .read-only-cell {
-    @apply bg-transparent cursor-default;
-  }
-  
-  /* Hover state for editable cells */
+
   .editable-cell:hover {
     @apply bg-blue-100/50;
   }
-  
-  /* Focus state for editable cells */
-  .editable-cell:focus-within {
-    @apply bg-blue-100/70 outline-none ring-2 ring-blue-500/50;
+
+  /* Read-only cells */
+  .read-only-cell {
+    @apply bg-transparent cursor-default;
+  }
+
+  /* Inventory row styles */
+  .inventory-row {
+    @apply border-t border-b border-gray-300;
+  }
+
+  .inventory-row:nth-child(even) {
+    @apply bg-gray-50/50;
+  }
+
+  /* Editable cells per tab */
+  .tab-inventory .editable-cell,
+  .tab-enter_identify .editable-cell,
+  .tab-price_verify .editable-cell,
+  .tab-depreciation .editable-cell,
+  .tab-recovery .editable-cell,
+  .active-tab .editable-cell {
+    @apply bg-blue-50/50 hover:bg-blue-100/70;
+  }
+
+  /* Sticky table header */
+  .inventory-grid table thead,
+  .inventory-grid table th {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background-color: #f9fafb; /* Tailwind gray-50 */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  /* Scrollable grid layout */
+  .inventory-grid {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .inventory-grid .overflow-auto {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  /* Checkbox styling */
+  input[type="checkbox"] {
+    @apply h-4 w-4 text-blue-400 border-gray-300 rounded focus:ring-blue-500 focus:ring-offset-2 cursor-pointer;
+    appearance: none;
+    background-color: #fff;
+    margin: 0;
+    font: inherit;
+    color: currentColor;
+    border: 1px solid #6b7280;
+    border-radius: 1.25em;
+    transform: translateY(-0.075em);
+    display: grid;
+    place-content: center;
+  }
+
+  input[type="checkbox"]:checked {
+    background-color: #2563eb;
+    border-color: #2563eb;
+  }
+
+  input[type="checkbox"]:checked::before {
+    content: "";
+    @apply h-5 w-5 text-blue-400 border-gray-300 rounded;
+    border-radius: 1.25em;
+    transform: scale(0.25);
+    transform-origin: center;
+    clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+    background-color: white;
+  }
+
+  input[type="checkbox"]:focus {
+    outline: max(2px, 0.15em) solid #3b82f6;
+    outline-offset: max(2px, 0.15em);
+  }
+
+  .checkbox-container {
+    @apply inline-flex items-center justify-center w-6 h-6;
   }
 }
 

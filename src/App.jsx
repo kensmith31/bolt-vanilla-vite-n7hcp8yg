@@ -1,18 +1,27 @@
-import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { supabase } from './lib/supabase';
-import { Auth } from './components/Auth';
-import { AdminDashboard } from './components/AdminDashboard';
-import { DeskAdjusterDashboard } from './components/DeskAdjusterDashboard';
-import { FieldAdjusterDashboard } from './components/FieldAdjusterDashboard';
-import { PolicyholderDashboard } from './components/PolicyholderDashboard';
-import { AdjustmentScreen } from './components/adjustment/AdjustmentScreen';
-import { HomeIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
-import { Toaster } from 'react-hot-toast';
+import { useState, useEffect } from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  useLocation,
+} from "react-router-dom";
+import routes from "tempo-routes";
+import { useRoutes } from "react-router-dom";
+import { supabase } from "./lib/supabase";
+import { Auth } from "./components/Auth";
+import { AdminDashboard } from "./components/AdminDashboard";
+import { DeskAdjusterDashboard } from "./components/DeskAdjusterDashboard";
+import { FieldAdjusterDashboard } from "./components/FieldAdjusterDashboard";
+import { PolicyholderDashboard } from "./components/PolicyholderDashboard";
+import { AdjustmentScreen } from "./components/adjustment/AdjustmentScreen";
+import { HomeIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { Toaster } from "react-hot-toast";
 
 function HeaderNavigation() {
   const location = useLocation();
-  const pathSegments = location.pathname.split('/').filter(Boolean);
+  const pathSegments = location.pathname.split("/").filter(Boolean);
 
   return (
     <nav className="flex items-center space-x-2 text-sm text-white/80">
@@ -22,7 +31,7 @@ function HeaderNavigation() {
       {pathSegments.map((segment, index) => (
         <div key={index} className="flex items-center space-x-2">
           <ChevronRightIcon className="h-4 w-4" />
-          <span className="capitalize">{segment.replace('-', ' ')}</span>
+          <span className="capitalize">{segment.replace("-", " ")}</span>
         </div>
       ))}
     </nav>
@@ -36,11 +45,11 @@ function App() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    console.log('App component mounted');
-    
+    console.log("App component mounted");
+
     const handleInvalidToken = async (error) => {
-      if (error?.message?.includes('Invalid Refresh Token')) {
-        console.log('Invalid refresh token detected, signing out...');
+      if (error?.message?.includes("Invalid Refresh Token")) {
+        console.log("Invalid refresh token detected, signing out...");
         await supabase.auth.signOut();
         setSession(null);
         setUserRole(null);
@@ -49,18 +58,21 @@ function App() {
         setError(error?.message);
       }
     };
-    
+
     supabase.auth.getSession().then(({ data: { session }, error }) => {
-      console.log('Initial session check:', session ? 'Session exists' : 'No session');
-      
+      console.log(
+        "Initial session check:",
+        session ? "Session exists" : "No session",
+      );
+
       if (error) {
         handleInvalidToken(error);
         setLoading(false);
         return;
       }
-      
+
       setSession(session);
-      
+
       if (session?.user?.id) {
         fetchUserRole(session.user.id);
       } else {
@@ -68,11 +80,13 @@ function App() {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      console.log('Auth state changed:', _event);
-      
-      if (_event === 'TOKEN_REFRESHED' && !session) {
-        console.log('Token refresh failed, signing out...');
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log("Auth state changed:", _event);
+
+      if (_event === "TOKEN_REFRESHED" && !session) {
+        console.log("Token refresh failed, signing out...");
         await supabase.auth.signOut();
         setSession(null);
         setUserRole(null);
@@ -80,9 +94,9 @@ function App() {
         setLoading(false);
         return;
       }
-      
+
       setSession(session);
-      
+
       if (session?.user?.id) {
         fetchUserRole(session.user.id);
       } else {
@@ -96,24 +110,26 @@ function App() {
 
   async function fetchUserRole(userId) {
     try {
-      console.log('Fetching role for user:', userId);
+      console.log("Fetching role for user:", userId);
       const { data: userData, error: roleError } = await supabase
-        .from('users')
-        .select(`
+        .from("users")
+        .select(
+          `
           roles (
             name
           )
-        `)
-        .eq('id', userId)
+        `,
+        )
+        .eq("id", userId)
         .single();
 
       if (roleError) throw roleError;
       if (!userData?.roles?.name) {
-        throw new Error('No role found for user');
+        throw new Error("No role found for user");
       }
       setUserRole(userData.roles.name);
     } catch (err) {
-      console.error('Error fetching user role:', err);
+      console.error("Error fetching user role:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -122,20 +138,25 @@ function App() {
 
   const getDashboardComponent = () => {
     switch (userRole) {
-      case 'admin':
+      case "admin":
         return <AdminDashboard />;
-      case 'desk_adjuster':
+      case "desk_adjuster":
         return <DeskAdjusterDashboard />;
-      case 'field_adjuster':
+      case "field_adjuster":
         return <FieldAdjusterDashboard />;
-      case 'policyholder':
+      case "policyholder":
         return <PolicyholderDashboard />;
       default:
         return <PolicyholderDashboard />;
     }
   };
 
-  console.log('Current state:', { session: !!session, userRole, loading, error });
+  console.log("Current state:", {
+    session: !!session,
+    userRole,
+    loading,
+    error,
+  });
 
   if (loading) {
     return (
@@ -152,7 +173,7 @@ function App() {
   }
 
   if (!session) {
-    console.log('Rendering Auth component');
+    console.log("Rendering Auth component");
     return (
       <>
         <Toaster position="top-right" />
@@ -181,16 +202,23 @@ function App() {
     );
   }
 
+  // Create a component that uses useRoutes inside the Router context
+  function TempoRoutes() {
+    return import.meta.env.VITE_TEMPO ? useRoutes(routes) : null;
+  }
+
   return (
     <>
       <Toaster position="top-right" />
       <Router>
         <div className="min-h-screen bg-background">
+          {/* Tempo routes properly used inside Router context */}
+          <TempoRoutes />
           <header className="bg-primary shadow">
             <div className="mx-auto w-[95%] py-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-8">
-                  <h1 className="text-4xl font-bold tracking-tight text-white font-montserrat">
+                  <h1 className="text-4xl tracking-tight text-white font-montserrat font-semibold">
                     Clarity Contents
                   </h1>
                   <HeaderNavigation />
@@ -198,7 +226,9 @@ function App() {
                 <div className="flex items-center gap-4">
                   <div className="text-sm text-white/80">
                     <span className="px-3 py-1 bg-white/10 rounded-full">
-                      {userRole?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      {userRole
+                        ?.replace("_", " ")
+                        .replace(/\b\w/g, (l) => l.toUpperCase())}
                     </span>
                   </div>
                   <button
@@ -215,7 +245,12 @@ function App() {
             <div className="mx-auto w-[95%] py-6">
               <Routes>
                 <Route path="/" element={getDashboardComponent()} />
-                <Route path="/claim/:fileNumber/*" element={<AdjustmentScreen userRole={userRole} />} />
+                <Route
+                  path="/claim/:fileNumber/*"
+                  element={<AdjustmentScreen userRole={userRole} />}
+                />
+                {/* Add this before the catchall route for Tempo */}
+                {import.meta.env.VITE_TEMPO && <Route path="/tempobook/*" />}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
@@ -226,4 +261,4 @@ function App() {
   );
 }
 
-export default App
+export default App;
