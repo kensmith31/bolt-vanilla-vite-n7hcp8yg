@@ -16,6 +16,7 @@ import toast from "react-hot-toast";
 
 export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
   const [scrollPosition, setScrollPosition] = useState(0);
+  const [currentPhotoPage, setCurrentPhotoPage] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedItem, setEditedItem] = useState({});
@@ -274,12 +275,28 @@ export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
     return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  const handleScroll = (direction) => {
-    const container = document.getElementById("photo-container");
-    if (container) {
-      const scrollAmount = direction === "left" ? -200 : 200;
-      container.scrollBy({ left: scrollAmount, behavior: "smooth" });
-      setScrollPosition(container.scrollLeft + scrollAmount);
+  // Reset photo page when item changes
+  React.useEffect(() => {
+    setCurrentPhotoPage(0);
+  }, [item.id]);
+
+  // Get photos for current page (4 per page)
+  const getPhotosForCurrentPage = () => {
+    if (!item.photos || item.photos.length === 0) return [];
+
+    const startIdx = currentPhotoPage * 4;
+    const endIdx = startIdx + 4;
+    return item.photos.slice(startIdx, endIdx);
+  };
+
+  const currentPagePhotos = getPhotosForCurrentPage();
+  const totalPages = Math.ceil((item.photos?.length || 0) / 4);
+
+  const handlePhotoNavigation = (direction) => {
+    if (direction === "left" && currentPhotoPage > 0) {
+      setCurrentPhotoPage((prev) => prev - 1);
+    } else if (direction === "right" && currentPhotoPage < totalPages - 1) {
+      setCurrentPhotoPage((prev) => prev + 1);
     }
   };
 
@@ -360,6 +377,9 @@ export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
   const handleDeletePhoto = async (photoUrl, index) => {
     if (confirm("Are you sure you want to delete this photo?")) {
       try {
+        // Calculate the actual index in the full photos array
+        const actualIndex = currentPhotoPage * 4 + index;
+
         // Extract the file name from the URL
         const fileName = photoUrl.split("/").pop();
 
@@ -375,7 +395,7 @@ export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
 
         // Update the item's photos array
         const updatedPhotos = [...(item.photos || [])];
-        updatedPhotos.splice(index, 1);
+        updatedPhotos.splice(actualIndex, 1);
 
         const { error: updateError } = await supabase
           .from("items")
@@ -385,6 +405,16 @@ export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
         if (updateError) throw updateError;
 
         toast.success("Photo deleted successfully");
+
+        // If we deleted the last photo on the current page and it's not the first page,
+        // go back one page
+        if (
+          currentPagePhotos.length === 1 &&
+          currentPhotoPage > 0 &&
+          currentPhotoPage === totalPages - 1
+        ) {
+          setCurrentPhotoPage(currentPhotoPage - 1);
+        }
 
         if (onRefresh) {
           onRefresh();
@@ -961,7 +991,7 @@ export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
           </div>
         </div>
 
-        {/* Photos Section */}
+        {/* Photos Section - UPDATED FOR PAGINATION */}
         <div className="bg-white rounded-lg shadow p-2">
           <h3 className="text-[10px] font-semibold text-gray-900 mb-2 text-center">
             Photos
@@ -969,28 +999,47 @@ export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
           <div className="space-y-1.5">
             {item.photos && item.photos.length > 0 ? (
               <div className="relative">
-                <button
-                  onClick={() => handleScroll("left")}
-                  className="absolute left-0 top-1/2 z-10 p-1 bg-white/80 rounded-full shadow hover:bg-white transform -translate-y-1/2 -translate-x-1/2"
-                >
-                  <ChevronLeftIcon className="h-5 w-5 text-gray-600" />
-                </button>
+                {/* Only show navigation buttons if we have more than 4 photos */}
+                {item.photos.length > 4 && (
+                  <>
+                    <button
+                      onClick={() => handlePhotoNavigation("left")}
+                      className={`absolute left-0 top-1/2 z-10 p-1 bg-white/80 rounded-full shadow transform -translate-y-1/2 -translate-x-1/2 ${
+                        currentPhotoPage === 0
+                          ? "opacity-50 cursor-not-allowed"
+                          : "hover:bg-white"
+                      }`}
+                      disabled={currentPhotoPage === 0}
+                    >
+                      <ChevronLeftIcon className="h-4 w-4 text-gray-600" />
+                    </button>
+                    <button
+                      onClick={() => handlePhotoNavigation("right")}
+                      className={`absolute right-0 top-1/2 z-10 p-1 bg-white/80 rounded-full shadow transform -translate-y-1/2 translate-x-1/2 ${
+                        currentPhotoPage >= totalPages - 1
+                          ? "opacity-50 cursor-not-allowed"
+                          : "hover:bg-white"
+                      }`}
+                      disabled={currentPhotoPage >= totalPages - 1}
+                    >
+                      <ChevronRightIcon className="h-4 w-4 text-gray-600" />
+                    </button>
+                  </>
+                )}
 
-                <div
-                  id="photo-container"
-                  className="flex gap-2 overflow-x-auto scrollbar-hide py-2"
-                  style={{ scrollBehavior: "smooth" }}
-                >
-                  {item.photos.map((photo, index) => (
+                {/* Grid for the photos - display only current page photos */}
+                <div className="grid grid-cols-4 gap-1 py-2">
+                  {currentPagePhotos.map((photo, index) => (
                     <div key={index} className="relative group">
                       <img
                         src={photo}
-                        alt={`Item photo ${index + 1}`}
-                        className="h-24 w-24 object-cover rounded-lg shadow-sm"
+                        alt={`Item photo ${currentPhotoPage * 4 + index + 1}`}
+                        className="h-16 w-16 object-cover rounded-lg shadow-sm"
                       />
                       <button
                         onClick={() => handleDeletePhoto(photo, index)}
                         className="absolute top-1 right-1 p-1 bg-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Delete photo"
                       >
                         <XMarkIcon className="h-3 w-3 text-white" />
                       </button>
@@ -998,14 +1047,36 @@ export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
                   ))}
                 </div>
 
-                <button
-                  onClick={() => handleScroll("right")}
-                  className="absolute right-0 top-1/2 z-10 p-1 bg-white/80 rounded-full shadow hover:bg-white transform -translate-y-1/2 translate-x-1/2"
-                >
-                  <ChevronRightIcon className="h-5 w-5 text-gray-600" />
-                </button>
+                <div className="mt-2 flex justify-center flex-col items-center">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] text-gray-500">
+                      {item.photos.length > 0
+                        ? `${currentPhotoPage * 4 + 1}-${Math.min(
+                            (currentPhotoPage + 1) * 4,
+                            item.photos.length,
+                          )} of ${item.photos.length}`
+                        : "0 photos"}
+                    </span>
+                  </div>
 
-                <div className="mt-2 flex justify-center">
+                  {/* Pagination indicators */}
+                  {totalPages > 1 && (
+                    <div className="flex gap-1 justify-center mb-2">
+                      {[...Array(totalPages)].map((_, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setCurrentPhotoPage(i)}
+                          className={`h-1.5 rounded-full ${
+                            currentPhotoPage === i
+                              ? "w-4 bg-blue-500"
+                              : "w-1.5 bg-gray-300"
+                          }`}
+                          aria-label={`Go to page ${i + 1}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+
                   <button
                     className="flex items-center gap-1 px-2 py-1 text-[10px] text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
                     onClick={handleFileSelect}

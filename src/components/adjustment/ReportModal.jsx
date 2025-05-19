@@ -50,10 +50,9 @@ export function ReportModal({ isOpen, onClose, claimId }) {
   const [uniqueFilterValues, setUniqueFilterValues] = useState([]);
 
   const availableColumns = [
-    { key: "item_number", label: "Item #" },
+    { key: "item_number", label: "#" },
     { key: "description", label: "Description" },
     { key: "room", label: "Room" },
-    { key: "category", label: "Category" },
     { key: "quantity", label: "Qty." },
     { key: "claimed_rcv", label: "Claimed RCV" },
     { key: "adjusted_rcv", label: "Adjusted RCV" },
@@ -61,16 +60,18 @@ export function ReportModal({ isOpen, onClose, claimId }) {
     { key: "tax_rate", label: "Tax Rate" },
     { key: "tax_amount", label: "Tax Amt." },
     { key: "rcv_plus_tax", label: "RCV + Tax" },
+    { key: "age", label: "Age" },
+    { key: "condition", label: "Condition" },
     { key: "depreciation_percent", label: "Dep. %" },
     { key: "depreciation_amount", label: "Dep. Amt." },
     { key: "acv", label: "ACV" },
     { key: "replacement_cost_applies", label: "RC Applies" },
     { key: "replaced", label: "Replaced" },
-    { key: "replacement_spent", label: "Amount Spent" },
+    { key: "replacement_spent", label: "Amt. Spent" },
     { key: "holdback_due", label: "Holdback Due" },
+    { key: "comparable_link", label: "Comparable Link" },
     { key: "status", label: "Status" },
-    { key: "age", label: "Age" },
-    { key: "condition", label: "Condition" },
+    { key: "category", label: "Category" },
   ];
 
   const reportTypes = [
@@ -276,6 +277,8 @@ export function ReportModal({ isOpen, onClose, claimId }) {
       return formatDepreciationPercent(item[column]);
     } else if (column === "replacement_cost_applies" || column === "replaced") {
       return formatBoolean(item[column]);
+    } else if (column === "comparable_link") {
+      return item[column] || "-";
     } else {
       return item[column] || "-";
     }
@@ -346,7 +349,7 @@ export function ReportModal({ isOpen, onClose, claimId }) {
       // Determine which columns to include based on report type
       let columnsToInclude = [];
       if (reportType === "summary") {
-        columnsToInclude = [
+        const summaryColumnKeys = [
           "item_number",
           "description",
           "quantity",
@@ -357,8 +360,15 @@ export function ReportModal({ isOpen, onClose, claimId }) {
           "depreciation_amount",
           "acv",
         ];
+
+        // Sort summaryColumns based on the order in availableColumns
+        columnsToInclude = [...summaryColumnKeys].sort((a, b) => {
+          const indexA = availableColumns.findIndex((col) => col.key === a);
+          const indexB = availableColumns.findIndex((col) => col.key === b);
+          return indexA - indexB;
+        });
       } else if (reportType === "detailed") {
-        columnsToInclude = [
+        const detailedColumnKeys = [
           "item_number",
           "description",
           "quantity",
@@ -373,6 +383,13 @@ export function ReportModal({ isOpen, onClose, claimId }) {
           "acv",
           "replacement_cost_applies",
         ];
+
+        // Sort detailedColumns based on the order in availableColumns
+        columnsToInclude = [...detailedColumnKeys].sort((a, b) => {
+          const indexA = availableColumns.findIndex((col) => col.key === a);
+          const indexB = availableColumns.findIndex((col) => col.key === b);
+          return indexA - indexB;
+        });
       } else {
         columnsToInclude = selectedColumns;
       }
@@ -601,6 +618,12 @@ export function ReportModal({ isOpen, onClose, claimId }) {
           const groupedItems = getGroupedItems();
           let currentY = margin + 0.7;
 
+          // Get the headers based on selectedColumns to maintain order
+          const customHeaders = selectedColumns.map((col) => {
+            const column = availableColumns.find((c) => c.key === col);
+            return column ? column.label : col;
+          });
+
           Object.entries(groupedItems).forEach(
             ([groupName, groupItems], index) => {
               // Add group header
@@ -614,12 +637,13 @@ export function ReportModal({ isOpen, onClose, claimId }) {
               doc.text(`Group: ${groupName}`, margin, currentY - 0.3);
               doc.setFont(undefined, "normal");
 
+              // Ensure we use selectedColumns in the correct order
               const groupData = groupItems.map((item) => {
                 return selectedColumns.map((col) => formatCellValue(item, col));
               });
 
               autoTable(doc, {
-                head: [headers],
+                head: [customHeaders],
                 body: groupData,
                 startY: currentY,
                 margin: { top: 0.25, right: 0.25, bottom: 0.5, left: 0.25 },
@@ -649,7 +673,6 @@ export function ReportModal({ isOpen, onClose, claimId }) {
           autoTable(doc, {
             head: [headers],
             body: data,
-            startY: margin + 0.7,
             margin: { top: 0.25, right: 0.25, bottom: 0.5, left: 0.25 },
             styles: { fontSize: 8 },
             headStyles: { fillColor: [66, 139, 202] },
@@ -810,15 +833,16 @@ export function ReportModal({ isOpen, onClose, claimId }) {
           autoTable(doc, {
             head: [detailedHeaders],
             body: detailedData,
-            startY: margin + 0.7,
+            startY: margin,
             margin: { top: 0.25, right: 0.25, bottom: 0.5, left: 0.25 },
             styles: { fontSize: 8 },
             headStyles: { fillColor: [66, 139, 202] },
-            columnStyles: {
-              1: { cellWidth: 2, overflow: "linebreak" }, // Description column (index 1) with text wrapping
-            },
             didParseCell: function (data) {
-              if (data.column.index === 1) {
+              // Find the description column by header name
+              const descriptionIndex = detailedHeaders.findIndex(
+                (header) => header === "Description",
+              );
+              if (data.column.index === descriptionIndex) {
                 // Description column
                 data.cell.styles.cellWidth = 2;
                 data.cell.styles.overflow = "linebreak";
@@ -829,7 +853,6 @@ export function ReportModal({ isOpen, onClose, claimId }) {
           autoTable(doc, {
             head: [headers],
             body: data,
-            startY: margin + 0.7,
             margin: { top: 0.25, right: 0.25, bottom: 0.5, left: 0.25 },
             styles: { fontSize: 8 },
             headStyles: { fillColor: [66, 139, 202] },
