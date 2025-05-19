@@ -13,6 +13,7 @@ import {
 import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 import toast from "react-hot-toast";
+import { Dialog } from "@headlessui/react";
 
 export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
   const [scrollPosition, setScrollPosition] = useState(0);
@@ -25,6 +26,10 @@ export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef(null);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [allClaimPhotos, setAllClaimPhotos] = useState([]);
+  const [currentModalPhoto, setCurrentModalPhoto] = useState(null);
 
   // Helper function to format field names for display
   const formatFieldName = (fieldName) => {
@@ -424,6 +429,169 @@ export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
         toast.error("Failed to delete photo: " + err.message);
       }
     }
+  };
+
+  // Function to open photo in a new browser window and load all claim photos
+  const openPhotoModal = async (photoUrl, index) => {
+    try {
+      // Calculate the actual index in the full photos array
+      const actualIndex = currentPhotoPage * 4 + index;
+      setCurrentPhotoIndex(actualIndex);
+
+      // Fetch all items in the claim to get all photos
+      const { data: claimItems, error } = await supabase
+        .from("items")
+        .select("id, description, photos, item_number")
+        .eq("claim_id", item.claim_id);
+
+      if (error) throw error;
+
+      // Create a flat array of all photos with their item info
+      const allPhotos = [];
+      claimItems.forEach((claimItem) => {
+        if (claimItem.photos && claimItem.photos.length > 0) {
+          claimItem.photos.forEach((photoUrl) => {
+            allPhotos.push({
+              url: photoUrl,
+              itemId: claimItem.id,
+              itemDescription: claimItem.description,
+              itemNumber: claimItem.item_number,
+            });
+          });
+        }
+      });
+
+      setAllClaimPhotos(allPhotos);
+
+      // Find the index of the current photo in the all photos array
+      const photoIndex = allPhotos.findIndex(
+        (photo) => photo.url === photoUrl && photo.itemId === item.id,
+      );
+
+      if (photoIndex !== -1) {
+        setCurrentPhotoIndex(photoIndex);
+        const currentPhoto = allPhotos[photoIndex];
+
+        // Open the photo in a new window
+        const photoWindow = window.open("", "_blank");
+        if (photoWindow) {
+          photoWindow.document.write(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Item #${currentPhoto.itemNumber} - ${currentPhoto.itemDescription}</title>
+              <style>
+                body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #000; color: white; display: flex; flex-direction: column; height: 100vh; }
+                .header { background-color: rgba(0, 0, 0, 0.8); padding: 10px 20px; position: fixed; top: 0; left: 0; right: 0; z-index: 10; display: flex; justify-content: space-between; align-items: center; }
+                .title { font-size: 18px; font-weight: bold; }
+                .counter { font-size: 14px; }
+                .actions { display: flex; align-items: center; gap: 15px; }
+                .download-btn { background-color: #3b82f6; color: white; border: none; border-radius: 4px; padding: 5px 10px; font-size: 14px; cursor: pointer; }
+                .download-btn:hover { background-color: #2563eb; }
+                .image-container { display: flex; align-items: center; justify-content: center; flex: 1; margin-top: 50px; }
+                img { max-width: 90%; max-height: 80vh; object-fit: contain; }
+                .nav-button { position: fixed; top: 50%; transform: translateY(-50%); background-color: rgba(255, 255, 255, 0.2); color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+                .nav-button:hover { background-color: rgba(255, 255, 255, 0.4); }
+                .prev { left: 20px; }
+                .next { right: 20px; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <div class="title">Item #${currentPhoto.itemNumber} - ${currentPhoto.itemDescription}</div>
+                <div class="actions">
+                  <div class="counter">Photo ${photoIndex + 1} of ${allPhotos.length}</div>
+                  <button class="download-btn" id="download-button">Download</button>
+                </div>
+              </div>
+              <div class="image-container">
+                <img src="${currentPhoto.url}" alt="${currentPhoto.itemDescription}" id="photo-image">
+              </div>
+              <button class="nav-button prev" id="prev-button">&lt;</button>
+              <button class="nav-button next" id="next-button">&gt;</button>
+              
+              <script>
+                // Store all photos data
+                const allPhotos = ${JSON.stringify(allPhotos)};
+                let currentIndex = ${photoIndex};
+                
+                // Function to update the displayed photo
+                function updatePhoto() {
+                  const photo = allPhotos[currentIndex];
+                  document.getElementById('photo-image').src = photo.url;
+                  document.getElementById('photo-image').alt = photo.itemDescription;
+                  document.querySelector('.title').textContent = 'Item #' + photo.itemNumber + ' - ' + photo.itemDescription;
+                  document.querySelector('.counter').textContent = 'Photo ' + (currentIndex + 1) + ' of ' + allPhotos.length;
+                  document.title = 'Item #' + photo.itemNumber + ' - ' + photo.itemDescription;
+                }
+                
+                // Navigate to previous photo
+                document.getElementById('prev-button').addEventListener('click', () => {
+                  currentIndex = (currentIndex > 0) ? currentIndex - 1 : allPhotos.length - 1;
+                  updatePhoto();
+                });
+                
+                // Navigate to next photo
+                document.getElementById('next-button').addEventListener('click', () => {
+                  currentIndex = (currentIndex < allPhotos.length - 1) ? currentIndex + 1 : 0;
+                  updatePhoto();
+                });
+                
+                // Keyboard navigation
+                document.addEventListener('keydown', (e) => {
+                  if (e.key === 'ArrowLeft') {
+                    document.getElementById('prev-button').click();
+                  } else if (e.key === 'ArrowRight') {
+                    document.getElementById('next-button').click();
+                  }
+                });
+                
+                // Download functionality
+                document.getElementById('download-button').addEventListener('click', () => {
+                  const photo = allPhotos[currentIndex];
+                  const link = document.createElement('a');
+                  link.href = photo.url;
+                  link.download = 'item-' + photo.itemNumber + '-photo-' + (currentIndex + 1) + '.jpg';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                });
+              </script>
+            </body>
+            </html>
+          `);
+          photoWindow.document.close();
+        } else {
+          toast.error("Popup blocked. Please allow popups for this site.");
+        }
+      }
+    } catch (err) {
+      console.error("Error opening photo modal:", err);
+      toast.error("Failed to load photos: " + err.message);
+    }
+  };
+
+  // Function to navigate between photos in the modal
+  const navigateModalPhoto = (direction) => {
+    if (allClaimPhotos.length <= 1) return;
+
+    let newIndex;
+    if (direction === "prev") {
+      newIndex =
+        currentPhotoIndex > 0
+          ? currentPhotoIndex - 1
+          : allClaimPhotos.length - 1;
+    } else {
+      newIndex =
+        currentPhotoIndex < allClaimPhotos.length - 1
+          ? currentPhotoIndex + 1
+          : 0;
+    }
+
+    setCurrentPhotoIndex(newIndex);
+    setCurrentModalPhoto(allClaimPhotos[newIndex]);
   };
 
   return (
@@ -1034,7 +1202,9 @@ export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
                       <img
                         src={photo}
                         alt={`Item photo ${currentPhotoPage * 4 + index + 1}`}
-                        className="h-16 w-16 object-cover rounded-lg shadow-sm"
+                        className="h-16 w-16 object-cover rounded-lg shadow-sm cursor-pointer"
+                        onClick={() => openPhotoModal(photo, index)}
+                        title="Click to view full size"
                       />
                       <button
                         onClick={() => handleDeletePhoto(photo, index)}
@@ -1124,6 +1294,8 @@ export function ItemDetails({ item, categories, onEdit, onDelete, onRefresh }) {
           </div>
         </div>
       </div>
+
+      {/* Photo Modal has been replaced with opening photos in a new browser window */}
     </div>
   );
 }

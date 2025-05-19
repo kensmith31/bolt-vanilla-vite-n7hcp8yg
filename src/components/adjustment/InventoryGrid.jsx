@@ -9,6 +9,7 @@ import {
 import { cn } from "../../lib/utils";
 import { useSelection } from "../../contexts/SelectionContext";
 import { ItemDetails } from "./ItemDetails";
+import { ItemReceiptModal } from "./ItemReceiptModal";
 import toast from "react-hot-toast";
 import { useFilterStore } from "../../stores/filterStore";
 
@@ -37,6 +38,12 @@ export default function InventoryGrid({
   const retryCount = useRef(0);
   const maxRetries = 3;
   const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [receiptModalItem, setReceiptModalItem] = useState(null);
+  const [isReceiptViewerOpen, setIsReceiptViewerOpen] = useState(false);
+  const [viewingReceipts, setViewingReceipts] = useState([]);
+  const [currentReceiptIndex, setCurrentReceiptIndex] = useState(0);
+  const [isUpdatingAmountSpent, setIsUpdatingAmountSpent] = useState(false);
   const [sortConfig, setSortConfig] = useState({
     key: "item_number",
     direction: "ascending",
@@ -1642,10 +1649,7 @@ export default function InventoryGrid({
 
             {filteredItems.length > 0 && (
               <table className="min-w-full divide-y divide-gray-200 relative table-fixed border-spacing-0 shadow-sm rounded-md overflow-hidden">
-                <thead
-                  className="bg-gray-50"
-                  style={{ position: "sticky", top: 0, zIndex: 30 }}
-                >
+                <thead className="bg-gray-50">
                   <tr>
                     {columns.map((column) => (
                       <th
@@ -2512,18 +2516,39 @@ export default function InventoryGrid({
                                 ) : column.key === "receipts" ? (
                                   item[column.key]?.length > 0 ? (
                                     <div className="flex items-center space-x-2">
-                                      <img
-                                        src={item[column.key][0]}
-                                        alt="Receipt preview"
-                                        className="h-8 w-8 object-cover rounded cursor-pointer"
+                                      <div
+                                        className="h-8 w-8 flex items-center justify-center bg-gray-100 rounded cursor-pointer"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          window.open(
-                                            item[column.key][0],
-                                            "_blank",
-                                          );
+                                          setViewingReceipts(item[column.key]);
+                                          setCurrentReceiptIndex(0);
+                                          setReceiptModalItem(item);
+                                          setIsReceiptViewerOpen(true);
                                         }}
-                                      />
+                                      >
+                                        {item[column.key][0]
+                                          .toLowerCase()
+                                          .endsWith(".pdf") ? (
+                                          <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            className="h-5 w-5 text-red-600"
+                                            viewBox="0 0 20 20"
+                                            fill="currentColor"
+                                          >
+                                            <path
+                                              fillRule="evenodd"
+                                              d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
+                                              clipRule="evenodd"
+                                            />
+                                          </svg>
+                                        ) : (
+                                          <img
+                                            src={item[column.key][0]}
+                                            alt="Receipt preview"
+                                            className="h-5 w-5 object-cover rounded"
+                                          />
+                                        )}
+                                      </div>
                                       {item[column.key].length > 1 && (
                                         <span className="text-xs text-gray-500">
                                           +{item[column.key].length - 1}
@@ -2534,6 +2559,8 @@ export default function InventoryGrid({
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        setReceiptModalItem(item);
+                                        setIsReceiptModalOpen(true);
                                         console.log(
                                           "Upload receipt for item:",
                                           item.id,
@@ -2609,6 +2636,325 @@ export default function InventoryGrid({
           </>
         )}
       </div>
+
+      {/* Receipt Upload Modal */}
+      {isReceiptModalOpen && receiptModalItem && (
+        <ItemReceiptModal
+          isOpen={isReceiptModalOpen}
+          onClose={() => setIsReceiptModalOpen(false)}
+          item={receiptModalItem}
+          onUploadComplete={(updateData) => {
+            // Update the local state with the new receipt data
+            setItems(
+              items.map((item) =>
+                item.id === receiptModalItem.id
+                  ? { ...item, ...updateData }
+                  : item,
+              ),
+            );
+          }}
+        />
+      )}
+
+      {/* Receipt Viewer Modal */}
+      {isReceiptViewerOpen &&
+        viewingReceipts &&
+        viewingReceipts.length > 0 &&
+        receiptModalItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+              <div className="flex justify-between items-center p-4 border-b">
+                <div>
+                  <h3 className="text-lg font-medium">
+                    Receipt {currentReceiptIndex + 1} of{" "}
+                    {viewingReceipts.length}
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    #{receiptModalItem.item_number} -{" "}
+                    {receiptModalItem.description}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsReceiptViewerOpen(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-auto p-4 flex items-center justify-center">
+                {viewingReceipts[currentReceiptIndex]
+                  .toLowerCase()
+                  .endsWith(".pdf") ? (
+                  <iframe
+                    src={viewingReceipts[currentReceiptIndex]}
+                    className="w-full h-full min-h-[500px]"
+                    title="PDF Viewer"
+                  />
+                ) : (
+                  <img
+                    src={viewingReceipts[currentReceiptIndex]}
+                    alt="Receipt"
+                    className="max-w-full max-h-[70vh] object-contain"
+                  />
+                )}
+              </div>
+
+              <div className="p-4 border-t border-b">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium">Amount Spent</div>
+                  <div className="flex items-center">
+                    <button
+                      onClick={async () => {
+                        try {
+                          setIsUpdatingAmountSpent(true);
+                          const { error } = await supabase
+                            .from("items")
+                            .update({
+                              receipts: viewingReceipts.filter(
+                                (_, i) => i !== currentReceiptIndex,
+                              ),
+                              updated_at: new Date().toISOString(),
+                            })
+                            .eq("id", receiptModalItem.id);
+
+                          if (error) throw error;
+
+                          // Update local state
+                          const updatedReceipts = [...viewingReceipts];
+                          updatedReceipts.splice(currentReceiptIndex, 1);
+                          setViewingReceipts(updatedReceipts);
+
+                          // Update items state
+                          setItems(
+                            items.map((item) =>
+                              item.id === receiptModalItem.id
+                                ? { ...item, receipts: updatedReceipts }
+                                : item,
+                            ),
+                          );
+
+                          // Adjust current index if needed
+                          if (currentReceiptIndex >= updatedReceipts.length) {
+                            setCurrentReceiptIndex(
+                              Math.max(0, updatedReceipts.length - 1),
+                            );
+                          }
+
+                          // Close modal if no receipts left
+                          if (updatedReceipts.length === 0) {
+                            setIsReceiptViewerOpen(false);
+                          }
+
+                          toast.success("Receipt deleted successfully");
+                        } catch (err) {
+                          console.error("Error deleting receipt:", err);
+                          toast.error("Failed to delete receipt");
+                        } finally {
+                          setIsUpdatingAmountSpent(false);
+                        }
+                      }}
+                      className="text-red-600 hover:text-red-800 mr-4 text-sm font-medium"
+                      disabled={isUpdatingAmountSpent}
+                    >
+                      Delete Receipt
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsReceiptViewerOpen(false);
+                        setIsReceiptModalOpen(true);
+                      }}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    >
+                      Upload More
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <span className="text-gray-500 sm:text-sm">$</span>
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      placeholder="0.00"
+                      value={receiptModalItem.replacement_spent || ""}
+                      onChange={async (e) => {
+                        const newValue = e.target.value
+                          ? parseFloat(e.target.value)
+                          : null;
+                        try {
+                          setIsUpdatingAmountSpent(true);
+
+                          const updateData = {
+                            replacement_spent: newValue,
+                            updated_at: new Date().toISOString(),
+                          };
+
+                          // Calculate holdback_due if replacement_cost_applies and replaced are true
+                          if (
+                            receiptModalItem.replacement_cost_applies &&
+                            receiptModalItem.replaced
+                          ) {
+                            if (newValue !== null) {
+                              // Calculate holdback_due = rcv_plus_tax - acv - replacement_spent
+                              const holdbackDue = Math.max(
+                                0,
+                                (receiptModalItem.rcv_plus_tax || 0) -
+                                  (receiptModalItem.acv || 0) -
+                                  newValue,
+                              );
+                              updateData.holdback_due = holdbackDue;
+                            } else {
+                              // If replacement_spent is null, set holdback_due to the maximum possible value
+                              updateData.holdback_due = Math.max(
+                                0,
+                                (receiptModalItem.rcv_plus_tax || 0) -
+                                  (receiptModalItem.acv || 0),
+                              );
+                            }
+                          } else {
+                            // If replacement_cost_applies or replaced is false, set holdback_due to null
+                            updateData.holdback_due = null;
+                          }
+
+                          const { error } = await supabase
+                            .from("items")
+                            .update(updateData)
+                            .eq("id", receiptModalItem.id);
+
+                          if (error) throw error;
+
+                          // Update local state
+                          setItems(
+                            items.map((item) =>
+                              item.id === receiptModalItem.id
+                                ? { ...item, ...updateData }
+                                : item,
+                            ),
+                          );
+
+                          // Update modal item
+                          setReceiptModalItem({
+                            ...receiptModalItem,
+                            ...updateData,
+                          });
+
+                          toast.success("Amount spent updated");
+                        } catch (err) {
+                          console.error("Error updating amount spent:", err);
+                          toast.error("Failed to update amount spent");
+                        } finally {
+                          setIsUpdatingAmountSpent(false);
+                        }
+                      }}
+                      disabled={isUpdatingAmountSpent}
+                    />
+                  </div>
+                  {receiptModalItem.replacement_cost_applies &&
+                    receiptModalItem.replaced && (
+                      <div className="ml-4 text-sm">
+                        <div className="font-medium text-gray-700">
+                          Holdback Due:
+                        </div>
+                        <div className="font-bold">
+                          ${(receiptModalItem.holdback_due || 0).toFixed(2)}
+                        </div>
+                      </div>
+                    )}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center p-4">
+                <button
+                  onClick={() =>
+                    setCurrentReceiptIndex((prev) =>
+                      prev > 0 ? prev - 1 : viewingReceipts.length - 1,
+                    )
+                  }
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md flex items-center"
+                  disabled={viewingReceipts.length <= 1}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 mr-1"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Previous
+                </button>
+
+                <div className="text-sm text-gray-500">
+                  {currentReceiptIndex + 1} / {viewingReceipts.length}
+                </div>
+
+                <button
+                  onClick={() =>
+                    setCurrentReceiptIndex((prev) =>
+                      prev < viewingReceipts.length - 1 ? prev + 1 : 0,
+                    )
+                  }
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md flex items-center"
+                  disabled={viewingReceipts.length <= 1}
+                >
+                  Next
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 ml-1"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+
+                <a
+                  href={viewingReceipts[currentReceiptIndex]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-md flex items-center"
+                >
+                  Open in New Tab
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 ml-1"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" />
+                    <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 }

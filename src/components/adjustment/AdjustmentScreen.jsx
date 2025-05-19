@@ -254,7 +254,7 @@ export function AdjustmentScreen() {
         {/* Off-canvas menu */}
         <div
           className={cn(
-            "fixed inset-y-0 right-0 w-96 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50",
+            "fixed top-16 bottom-0 right-0 w-96 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50",
             isOffCanvasOpen
               ? "translate-x-0 rounded-l-2xl"
               : "translate-x-full",
