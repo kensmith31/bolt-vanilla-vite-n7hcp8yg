@@ -13,16 +13,50 @@ export function ItemReceiptModal({ isOpen, onClose, item, onUploadComplete }) {
   const [files, setFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [amountSpent, setAmountSpent] = useState(item?.replacement_spent || "");
+  const [amountSpent, setAmountSpent] = useState("");
   const fileInputRef = useRef(null);
   const dropAreaRef = useRef(null);
 
   // Reset state when modal opens with a new item
   useEffect(() => {
+    console.log("Modal opened with item:", item);
     if (isOpen && item) {
       setFiles([]);
       setUploadProgress(0);
-      setAmountSpent(item.replacement_spent || "");
+
+      try {
+        // Safely handle the replacement_spent value
+        if (
+          item.replacement_spent === null ||
+          item.replacement_spent === undefined
+        ) {
+          console.log(
+            "Setting amount spent to empty string (null/undefined value)",
+          );
+          setAmountSpent("");
+        } else {
+          // Make sure it's a valid number before converting to string
+          console.log(
+            "Raw replacement_spent value:",
+            item.replacement_spent,
+            typeof item.replacement_spent,
+          );
+          // Use Number() instead of parseFloat to better handle different types
+          const numValue = Number(item.replacement_spent);
+          console.log("Converted to number:", numValue, typeof numValue);
+
+          if (!isNaN(numValue)) {
+            console.log("Setting amount spent to:", numValue.toString());
+            setAmountSpent(numValue.toString());
+          } else {
+            console.log("Invalid number, setting to empty string");
+            setAmountSpent("");
+          }
+        }
+      } catch (error) {
+        console.error("Error setting initial amount:", error);
+        setAmountSpent("");
+      }
     }
   }, [isOpen, item]);
 
@@ -70,9 +104,34 @@ export function ItemReceiptModal({ isOpen, onClose, item, onUploadComplete }) {
   };
 
   const handleSave = async () => {
+    // Allow saving even if no files are selected, to update amount spent only
     if (files.length === 0) {
-      toast.error("Please select at least one file to upload");
-      return;
+      // Check if the amount has changed
+      try {
+        let currentAmountAsString = "";
+        if (
+          item?.replacement_spent !== null &&
+          item?.replacement_spent !== undefined
+        ) {
+          currentAmountAsString = Number(item.replacement_spent).toString();
+        }
+
+        console.log("Comparing amounts:", {
+          current: currentAmountAsString,
+          new: amountSpent,
+          areEqual: amountSpent === currentAmountAsString,
+        });
+
+        if (amountSpent === currentAmountAsString) {
+          toast.error(
+            "Please select at least one file to upload or change the amount spent",
+          );
+          return;
+        }
+      } catch (error) {
+        console.error("Error comparing amounts:", error);
+        // Continue anyway since we're changing the value
+      }
     }
 
     setIsUploading(true);
@@ -81,91 +140,102 @@ export function ItemReceiptModal({ isOpen, onClose, item, onUploadComplete }) {
     try {
       const uploadedUrls = [];
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileExt = file.name.split(".").pop();
-        const fileName = `${item.id}_${Date.now()}_${i}.${fileExt}`;
-        const filePath = `${fileName}`;
+      // Upload files if any
+      if (files.length > 0) {
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const fileExt = file.name.split(".").pop();
+          const fileName = `${item.id}_${Date.now()}_${i}.${fileExt}`;
+          const filePath = `${fileName}`;
 
-        // Upload the file to Supabase storage
-        const { data, error } = await supabase.storage
-          .from("itemreceipts")
-          .upload(filePath, file, {
-            cacheControl: "3600",
-            upsert: false,
-          });
+          // Upload the file to Supabase storage
+          const { data, error } = await supabase.storage
+            .from("itemreceipts")
+            .upload(filePath, file, {
+              cacheControl: "3600",
+              upsert: false,
+            });
 
-        if (error) {
-          throw error;
+          if (error) {
+            throw error;
+          }
+
+          // Get the public URL for the uploaded file
+          const { data: urlData } = supabase.storage
+            .from("itemreceipts")
+            .getPublicUrl(filePath);
+
+          uploadedUrls.push(urlData.publicUrl);
+
+          // Update progress
+          setUploadProgress(Math.round(((i + 1) / files.length) * 100));
         }
-
-        // Get the public URL for the uploaded file
-        const { data: urlData } = supabase.storage
-          .from("itemreceipts")
-          .getPublicUrl(filePath);
-
-        uploadedUrls.push(urlData.publicUrl);
-
-        // Update progress
-        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
       }
 
-      // Update the item with the new receipt URLs and amount spent
-      const currentReceipts = item.receipts || [];
-      const updatedReceipts = [...currentReceipts, ...uploadedUrls];
-
+      // Prepare update data
       const updateData = {
-        receipts: updatedReceipts,
         updated_at: new Date().toISOString(),
       };
 
-      // Handle the amount spent field
-      // amountSpent is already null or a number
-      updateData.replacement_spent = amountSpent;
+      // Only update receipts if new files were uploaded
+      if (uploadedUrls.length > 0) {
+        const currentReceipts = item.receipts || [];
+        updateData.receipts = [...currentReceipts, ...uploadedUrls];
+      }
 
-      // Calculate holdback_due if replacement_cost_applies and replaced are true
-      if (item.replacement_cost_applies && item.replaced) {
-        // Get the current item to ensure we have the latest values
-        const { data: currentItem, error: fetchError } = await supabase
-          .from("items")
-          .select("*")
-          .eq("id", item.id)
-          .single();
-
-        if (!fetchError && currentItem) {
-          if (updateData.replacement_spent !== null) {
-            // Calculate holdback_due = rcv_plus_tax - acv - replacement_spent
-            const holdbackDue = Math.max(
-              0,
-              (currentItem.rcv_plus_tax || 0) -
-                (currentItem.acv || 0) -
-                updateData.replacement_spent,
-            );
-
-            updateData.holdback_due = holdbackDue;
+      // Handle the amount spent field - convert empty string to null, otherwise to number
+      if (amountSpent === "") {
+        console.log("Setting replacement_spent to null (empty string)");
+        updateData.replacement_spent = null;
+      } else {
+        try {
+          const numValue = Number(amountSpent);
+          console.log(
+            "Converting amount spent to number:",
+            amountSpent,
+            "→",
+            numValue,
+          );
+          if (!isNaN(numValue)) {
+            updateData.replacement_spent = numValue;
           } else {
-            // If replacement_spent is null, set holdback_due to the maximum possible value
-            updateData.holdback_due = Math.max(
-              0,
-              (currentItem.rcv_plus_tax || 0) - (currentItem.acv || 0),
-            );
+            console.log("Invalid number, not updating replacement_spent");
           }
+        } catch (error) {
+          console.error("Error converting amount spent:", error);
         }
       }
 
-      const { error: updateError } = await supabase
+      // No holdback_due calculations - this is handled by the database
+
+      console.log("Updating item with data:", updateData);
+
+      // Update the item in the database
+      const { data, error: updateError } = await supabase
         .from("items")
         .update(updateData)
-        .eq("id", item.id);
+        .eq("id", item.id)
+        .select();
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error("Supabase update error:", updateError);
+        throw updateError;
+      }
 
-      toast.success("Receipts uploaded successfully");
+      console.log("Update successful, response:", data);
+
+      // Show success message
+      if (files.length > 0) {
+        toast.success("Receipts uploaded and amount updated successfully");
+      } else {
+        toast.success("Amount updated successfully");
+      }
+
       onUploadComplete(updateData);
       onClose();
     } catch (err) {
-      console.error("Error uploading receipts:", err);
-      toast.error("Failed to upload receipts: " + err.message);
+      console.error("Error updating item:", err);
+      toast.error("Failed to update: " + err.message);
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
@@ -223,6 +293,30 @@ export function ItemReceiptModal({ isOpen, onClose, item, onUploadComplete }) {
             <div className="text-base font-semibold">
               #{item?.item_number} - {item?.description}
             </div>
+          </div>
+
+          {/* Display current values from database */}
+          <div className="mb-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Current Amount Spent:</span>
+              <span className="font-medium">
+                {item?.replacement_spent !== null &&
+                item?.replacement_spent !== undefined
+                  ? `${Number(item.replacement_spent).toFixed(2)}`
+                  : "Not set"}
+              </span>
+            </div>
+            {item?.replacement_cost_applies && item?.replaced && (
+              <div className="flex justify-between mt-1">
+                <span className="text-gray-600">Current Holdback Due:</span>
+                <span className="font-medium">
+                  {item?.holdback_due !== null &&
+                  item?.holdback_due !== undefined
+                    ? `${Number(item.holdback_due).toFixed(2)}`
+                    : "Not set"}
+                </span>
+              </div>
+            )}
           </div>
 
           <div
@@ -336,6 +430,9 @@ export function ItemReceiptModal({ isOpen, onClose, item, onUploadComplete }) {
                 }}
               />
             </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Leave empty to clear the amount
+            </p>
           </div>
 
           {isUploading && (
@@ -364,7 +461,7 @@ export function ItemReceiptModal({ isOpen, onClose, item, onUploadComplete }) {
             <button
               type="button"
               onClick={handleSave}
-              disabled={isUploading || files.length === 0}
+              disabled={isUploading}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
             >
               {isUploading ? "Uploading..." : "Save"}
