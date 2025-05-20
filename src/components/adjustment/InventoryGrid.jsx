@@ -1188,7 +1188,7 @@ export default function InventoryGrid({
 
   const columns = useMemo(() => {
     const baseColumns = [
-      { key: "item_number", label: "#", width: "w-20", sortable: true },
+      { key: "item_number", label: "#", width: "w-12", sortable: true },
       {
         key: "description",
         label: "Description",
@@ -1245,8 +1245,8 @@ export default function InventoryGrid({
         },
         {
           key: "quantity",
-          label: "Quantity",
-          width: "w-32 min-w-[128px]",
+          label: "Qty",
+          width: "w-20 min-w-[80px]",
           sortable: true,
         },
         {
@@ -1316,9 +1316,15 @@ export default function InventoryGrid({
         },
         {
           key: "quantity",
-          label: "Quantity",
-          width: "w-32 min-w-[128px]",
+          label: "Qty",
+          width: "w-20 min-w-[80px]",
           sortable: true,
+        },
+        {
+          key: "accept_claimed",
+          label: "Accept Claimed",
+          width: "w-40 min-w-[160px]",
+          sortable: false,
         },
         {
           key: "adjusted_rcv",
@@ -1346,7 +1352,7 @@ export default function InventoryGrid({
         },
         {
           key: "comparable_link",
-          label: "Comparable Link",
+          label: "Comparable",
           width: "w-24 min-w-[96px]",
           sortable: true,
         },
@@ -1539,6 +1545,8 @@ export default function InventoryGrid({
         "holdback_due",
         "replacement_cost_applies",
         "receipts",
+        "accept_claimed",
+        "comparable_link",
       ].forEach((key) => {
         visibilityMap[key] = false;
       });
@@ -1561,6 +1569,8 @@ export default function InventoryGrid({
         "holdback_due",
         "replacement_cost_applies",
         "receipts",
+        "accept_claimed",
+        "comparable_link",
       ].forEach((key) => {
         visibilityMap[key] = false;
       });
@@ -1583,6 +1593,8 @@ export default function InventoryGrid({
         "holdback_due",
         "replacement_cost_applies",
         "receipts",
+        "accept_claimed",
+        "comparable_link",
       ].forEach((key) => {
         visibilityMap[key] = false;
       });
@@ -1605,6 +1617,8 @@ export default function InventoryGrid({
         "holdback_due",
         "replacement_cost_applies",
         "receipts",
+        "accept_claimed",
+        "comparable_link",
       ].forEach((key) => {
         visibilityMap[key] = false;
       });
@@ -1642,7 +1656,9 @@ export default function InventoryGrid({
       className={`h-full ${className}`}
       onRefreshData={() => fetchItems()}
     >
-      <div className="overflow-auto h-full relative">
+      <div className="overflow-auto h-full relative pb-32">
+        {" "}
+        {/* Added padding to bottom to make room for the fixed totals bar */}
         {loading && !items.length ? (
           <div className="flex justify-center items-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
@@ -1687,7 +1703,7 @@ export default function InventoryGrid({
                         className={cn(
                           "h-8 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 overflow-hidden",
                           column.key === "item_number" &&
-                            "sticky left-0 z-30 w-[5%] bg-gray-50",
+                            "sticky left-0 z-30 w-[3%] bg-gray-50",
                           column.key === "description" &&
                             "sticky left-[5%] z-30 w-[20%] bg-gray-50",
                           column.width,
@@ -1802,7 +1818,7 @@ export default function InventoryGrid({
                                   className={cn(
                                     "px-6 py-2 whitespace-nowrap text-sm text-gray-900 transition-colors duration-150 h-14 cursor-pointer",
                                     column.key === "item_number" &&
-                                      "sticky left-0 z-20 w-[5%] bg-white",
+                                      "sticky left-0 z-20 w-[3%] bg-white",
                                     column.key === "description" &&
                                       "sticky left-[5%] z-20 w-[20%] bg-white",
                                     selectedRows.has(item.id)
@@ -1859,7 +1875,7 @@ export default function InventoryGrid({
                                 className={cn(
                                   "px-6 py-2 whitespace-nowrap text-sm text-gray-900 transition-colors duration-150 h-14 overflow-hidden",
                                   column.key === "item_number" &&
-                                    "sticky left-0 z-20 w-[5%] bg-white",
+                                    "sticky left-0 z-20 w-[3%] bg-white",
                                   column.key === "description" &&
                                     "sticky left-[5%] z-20 w-[20%] bg-white",
                                   editableCells[mode]?.includes(column.key) &&
@@ -2529,6 +2545,40 @@ export default function InventoryGrid({
                                   ) : (
                                     "-"
                                   )
+                                ) : column.key === "accept_claimed" ? (
+                                  <div className="flex justify-center items-center h-full">
+                                    <button
+                                      className="px-2 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 flex items-center"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (item.claimed_rcv) {
+                                          handleCellEdit(
+                                            item.id,
+                                            "adjusted_rcv",
+                                            item.claimed_rcv,
+                                          );
+                                          toast.success(
+                                            "Copied claimed RCV to adjusted RCV",
+                                          );
+                                        } else {
+                                          toast.error(
+                                            "No claimed RCV value to copy",
+                                          );
+                                        }
+                                      }}
+                                    >
+                                      <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        className="h-4 w-4 mr-1"
+                                        viewBox="0 0 20 20"
+                                        fill="currentColor"
+                                      >
+                                        <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8z" />
+                                        <path d="M12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />
+                                      </svg>
+                                      Copy
+                                    </button>
+                                  </div>
                                 ) : column.key === "comparable_link" ? (
                                   editingCell?.id === item.id &&
                                   editingCell?.field === column.key ? (

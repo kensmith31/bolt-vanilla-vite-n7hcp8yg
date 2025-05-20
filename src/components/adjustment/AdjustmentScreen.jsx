@@ -80,20 +80,21 @@ export function AdjustmentScreen() {
     }
   }, [location.pathname]);
 
-  useEffect(() => {
-    const handleScroll = () => {
-      scrollPosition.current = window.scrollY;
-    };
+  // We'll remove the scroll event listeners since we're fixing the layout
+  // useEffect(() => {
+  //   const handleScroll = () => {
+  //     scrollPosition.current = window.scrollY;
+  //   };
 
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  //   window.addEventListener("scroll", handleScroll);
+  //   return () => window.removeEventListener("scroll", handleScroll);
+  // }, []);
 
-  useEffect(() => {
-    if (scrollPosition.current) {
-      window.scrollTo(0, scrollPosition.current);
-    }
-  }, [location.pathname]);
+  // useEffect(() => {
+  //   if (scrollPosition.current) {
+  //     window.scrollTo(0, scrollPosition.current);
+  //   }
+  // }, [location.pathname]);
 
   async function fetchClaim() {
     try {
@@ -206,7 +207,7 @@ export function AdjustmentScreen() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-700"></div>
       </div>
     );
@@ -228,304 +229,35 @@ export function AdjustmentScreen() {
   }
 
   return (
-    <>
-      <div className="space-y-2 w-[95%] mx-auto">
-        <Toaster position="top-right" />
-        <div className="bg-slate-700 shadow-lg rounded-lg h-12">
-          <div className="flex items-center justify-between px-6 py-2">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-4 text-lg font-montserrat text-white">
-                <span className="text-2xl font-bold">#{claim.file_number}</span>
-                <span className="text-white/20">|</span>
-                <span className="text-xl">
-                  {claim.insured_first_name} {claim.insured_last_name}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsOffCanvasOpen(true)}
-              className="text-white/70 hover:text-white"
-            >
-              <ChevronLeftIcon className="h-6 w-6" />
-            </button>
-          </div>
-        </div>
+    // Main container with fixed height to eliminate page scrolling
+    <div className="h-screen flex flex-col overflow-hidden">
+      <Toaster position="top-right" />
 
-        {/* Off-canvas menu */}
-        <div
-          className={cn(
-            "fixed top-16 bottom-0 right-0 w-96 bg-white shadow-lg transform transition-transform duration-300 ease-in-out z-50",
-            isOffCanvasOpen
-              ? "translate-x-0 rounded-l-2xl"
-              : "translate-x-full",
-          )}
-        >
-          <div className="h-full flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold">Claim Details</h2>
-              <button
-                onClick={() => setIsOffCanvasOpen(false)}
-                className="text-gray-400 hover:text-gray-500"
-              >
-                <ChevronRightIcon className="h-6 w-6" />
-              </button>
+      {/* Top control bar - fixed height */}
+      <div className="bg-slate-700 shadow-lg rounded-lg py-2 mx-auto w-[95%] mt-1">
+        <div className="flex items-center justify-between px-6">
+          <div className="flex items-center space-x-8">
+            {/* File number and Insured name */}
+            <div className="flex items-center space-x-4">
+              <span className="text-xl font-bold text-white">
+                #{claim.file_number}
+              </span>
+              <span className="text-white/20">|</span>
+              <span className="text-lg text-white">
+                {claim.insured_first_name} {claim.insured_last_name}
+              </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">
-                    Contact Information
-                  </h3>
-                  <div className="space-y-2">
-                    <p className="text-sm">
-                      <span className="font-medium">Email:</span> {claim.email}
-                    </p>
-                    <p className="text-sm">
-                      <span className="font-medium">Phone:</span>{" "}
-                      {claim.phone_number?.replace(
-                        /(\d{3})(\d{3})(\d{4})/,
-                        "($1) $2-$3",
-                      )}
-                    </p>
-                  </div>
-                </div>
+            {/* Visual separator */}
+            <div className="h-8 w-px bg-white/20"></div>
 
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">
-                    Property
-                  </h3>
-                  <div className="space-y-1">
-                    <p className="text-sm">{claim.property_address}</p>
-                    <p className="text-sm">
-                      {[
-                        claim.property_city,
-                        claim.property_state,
-                        claim.property_zip_code,
-                      ]
-                        .filter(Boolean)
-                        .join(", ")}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">
-                    Settings
-                  </h3>
-                  <div className="space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">
-                          Default Tax Rate
-                        </span>
-                        {isEditingTaxRate ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              pattern="[0-9]*[.]?[0-9]*"
-                              min="0"
-                              max="100"
-                              defaultValue={
-                                claim.default_tax_rate
-                                  ? (claim.default_tax_rate * 100).toFixed(3)
-                                  : ""
-                              }
-                              className="w-20 h-6 text-sm rounded border-gray-300 focus:border-blue-500 focus:ring-blue-500 text-right"
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  handleTaxRateUpdate(e.target.value);
-                                } else if (e.key === "Escape") {
-                                  setIsEditingTaxRate(false);
-                                }
-                              }}
-                              autoFocus
-                            />
-                            <span className="text-gray-500">%</span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const input =
-                                  e.target.parentElement.querySelector("input");
-                                handleTaxRateUpdate(input.value);
-                              }}
-                              className="text-xs bg-green-500 text-white px-2 py-0.5 rounded hover:bg-green-600"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={() => setIsEditingTaxRate(false)}
-                              className="text-xs bg-gray-500 text-white px-2 py-0.5 rounded hover:bg-gray-600"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">
-                              {claim.default_tax_rate != null
-                                ? `${(claim.default_tax_rate * 100).toFixed(3)}%`
-                                : "Not set"}
-                            </span>
-                            <button
-                              onClick={() => setIsEditingTaxRate(true)}
-                              className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded hover:bg-blue-600"
-                            >
-                              Edit
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">
-                          Depreciation
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={async () => {
-                              try {
-                                const { error } = await supabase
-                                  .from("claims")
-                                  .update({
-                                    depreciation_applicable:
-                                      !claim.depreciation_applicable,
-                                    depreciation_recoverable:
-                                      claim.depreciation_applicable
-                                        ? false
-                                        : claim.depreciation_recoverable,
-                                  })
-                                  .eq("file_number", fileNumber);
-
-                                if (error) throw error;
-
-                                setClaim((prev) => ({
-                                  ...prev,
-                                  depreciation_applicable:
-                                    !prev.depreciation_applicable,
-                                  depreciation_recoverable:
-                                    prev.depreciation_applicable
-                                      ? false
-                                      : prev.depreciation_recoverable,
-                                }));
-
-                                toast.success("Depreciation setting updated");
-                              } catch (err) {
-                                console.error(
-                                  "Error updating depreciation setting:",
-                                  err,
-                                );
-                                toast.error(
-                                  "Failed to update depreciation setting",
-                                );
-                              }
-                            }}
-                            className={`px-2 py-1 text-xs font-semibold rounded ${
-                              claim.depreciation_applicable
-                                ? "bg-green-100 text-green-800 hover:bg-green-200"
-                                : "bg-red-100 text-red-800 hover:bg-red-200"
-                            }`}
-                          >
-                            {claim.depreciation_applicable
-                              ? "Applicable"
-                              : "Not Applicable"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {claim.depreciation_applicable && (
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">
-                            Recovery Tab
-                          </span>
-                          <button
-                            onClick={async () => {
-                              try {
-                                const { error } = await supabase
-                                  .from("claims")
-                                  .update({
-                                    depreciation_recoverable:
-                                      !claim.depreciation_recoverable,
-                                  })
-                                  .eq("file_number", fileNumber);
-
-                                if (error) throw error;
-
-                                setClaim((prev) => ({
-                                  ...prev,
-                                  depreciation_recoverable:
-                                    !prev.depreciation_recoverable,
-                                }));
-
-                                toast.success("Recovery setting updated");
-                              } catch (err) {
-                                console.error(
-                                  "Error updating recovery setting:",
-                                  err,
-                                );
-                                toast.error(
-                                  "Failed to update recovery setting",
-                                );
-                              }
-                            }}
-                            className={`px-2 py-1 text-xs font-semibold rounded ${
-                              claim.depreciation_recoverable
-                                ? "bg-purple-100 text-purple-800 hover:bg-purple-200"
-                                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                            }`}
-                          >
-                            {claim.depreciation_recoverable
-                              ? "Enabled"
-                              : "Disabled"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-gray-500 mb-2">
-                    Active Users
-                  </h3>
-                  <div className="space-y-2">
-                    {activeParticipants.map((participant) => (
-                      <div
-                        key={participant.id}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span>
-                          {participant.users.first_name}{" "}
-                          {participant.users.last_name}
-                        </span>
-                        <span className="text-gray-500">
-                          {participant.roles.name.replace("_", " ")}
-                        </span>
-                      </div>
-                    ))}
-                    <button className="w-full mt-2 px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center justify-center gap-1.5">
-                      <UserPlusIcon className="h-4 w-4" />
-                      Add Participant
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white shadow rounded-lg w-full h-10 flex items-center px-4">
-          <div className="flex items-center justify-between w-full gap-4">
+            {/* Search controls */}
             <div className="flex items-center gap-4 flex-1">
               <div className="relative">
                 <input
                   type="number"
                   placeholder="Enter #"
-                  className="w-24 pl-3 pr-2 py-1 text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-24 pl-3 pr-2 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
                   onChange={(e) => {
                     const value = e.target.value;
                     if (value) {
@@ -552,90 +284,104 @@ export function AdjustmentScreen() {
                     setSearchQuery(value);
                   }}
                   placeholder="Search any field..."
-                  className="w-64 pl-9 pr-4 py-1 text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-64 pl-9 pr-4 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
-                <MagnifyingGlassIcon className="absolute left-2.5 top-1.5 h-5 w-5 text-gray-400" />
+                <MagnifyingGlassIcon className="absolute left-2.5 top-2 h-5 w-5 text-gray-400" />
               </div>
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery("")}
-                  className="p-1 rounded-full hover:bg-gray-100"
+                  className="p-1 rounded-full hover:bg-slate-700"
                 >
-                  <XCircleIcon className="h-5 w-5 text-gray-400 hover:text-gray-500" />
+                  <XCircleIcon className="h-5 w-5 text-gray-300 hover:text-white" />
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              {selectedRows.size > 0 && (
-                <button
-                  onClick={clearSelections}
-                  className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 flex items-center gap-1.5"
-                >
-                  Clear Selection ({selectedRows.size})
-                </button>
-              )}
-              {selectedRows.size > 0 && (
-                <button
-                  onClick={() => setIsBulkEditModalOpen(true)}
-                  className="px-3 py-1 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center gap-1.5"
-                >
-                  Edit Selected ({selectedRows.size})
-                </button>
-              )}
+          </div>
 
-              {/* Updated Filter Button with Indicator */}
+          <div className="flex items-center gap-3">
+            {selectedRows.size > 0 && (
               <button
-                onClick={() => setIsFilterModalOpen(true)}
-                className={cn(
-                  "px-3 py-1 text-sm rounded-md flex items-center gap-1.5",
-                  hasActiveFilters
-                    ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200",
-                )}
+                onClick={clearSelections}
+                className="px-3 py-1.5 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 flex items-center gap-1.5"
               >
-                <FunnelIcon className="h-4 w-4" />
-                {hasActiveFilters ? "Filters Active" : "Filter"}
+                Clear Selection ({selectedRows.size})
               </button>
+            )}
+            {selectedRows.size > 0 && (
+              <button
+                onClick={() => setIsBulkEditModalOpen(true)}
+                className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center gap-1.5"
+              >
+                Edit Selected ({selectedRows.size})
+              </button>
+            )}
 
-              {/* Add Clear Filters button when filters are active */}
-              {hasActiveFilters && (
-                <button
-                  onClick={handleClearFilters}
-                  className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 flex items-center gap-1.5"
-                >
-                  <XCircleIcon className="h-4 w-4" />
-                  Clear Filters
-                </button>
+            {/* Updated Filter Button with Indicator */}
+            <button
+              onClick={() => setIsFilterModalOpen(true)}
+              className={cn(
+                "px-3 py-1.5 text-sm rounded-md flex items-center gap-1.5",
+                hasActiveFilters
+                  ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  : "bg-white text-gray-700 hover:bg-gray-100",
               )}
+            >
+              <FunnelIcon className="h-4 w-4" />
+              {hasActiveFilters ? "Filters Active" : "Filter"}
+            </button>
 
+            {/* Add Clear Filters button when filters are active */}
+            {hasActiveFilters && (
               <button
-                onClick={() => setIsBulkImportModalOpen(true)}
-                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 flex items-center gap-1.5"
+                onClick={handleClearFilters}
+                className="px-3 py-1.5 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 flex items-center gap-1.5"
               >
-                <ArrowUpTrayIcon className="h-4 w-4" />
-                Import
+                <XCircleIcon className="h-4 w-4" />
+                Clear Filters
               </button>
+            )}
 
-              <button
-                onClick={() => setIsAddItemModalOpen(true)}
-                className="px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center"
-              >
-                <PlusIcon className="h-4 w-4" />
-                Add
-              </button>
-            </div>
+            <button
+              onClick={() => setIsBulkImportModalOpen(true)}
+              className="px-3 py-1.5 text-sm bg-white text-gray-700 rounded-md hover:bg-gray-100 flex items-center gap-1.5"
+            >
+              <ArrowUpTrayIcon className="h-4 w-4" />
+              Import
+            </button>
+
+            <button
+              onClick={() => setIsAddItemModalOpen(true)}
+              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-1.5"
+            >
+              <PlusIcon className="h-4 w-4" />
+              Add
+            </button>
+
             <button
               onClick={() => setIsReportModalOpen(true)}
-              className="px-3 py-1 text-sm bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 flex items-center gap-1.5"
+              className="px-3 py-1.5 text-sm bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 flex items-center gap-1.5"
             >
               <DocumentTextIcon className="h-4 w-4" />
               Reports
             </button>
+
+            {/* More prominent navigation arrow */}
+            <button
+              onClick={() => setIsOffCanvasOpen(true)}
+              className="ml-2 p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+            >
+              <ChevronLeftIcon className="h-5 w-5" />
+            </button>
           </div>
         </div>
+      </div>
 
-        <div className="bg-white shadow rounded-lg w-full flex flex-col overflow-hidden">
-          <div className="sticky top-0 z-20 bg-white border-b border-gray-200 rounded-t-lg">
+      {/* Main content area - takes remaining height */}
+      <div className="flex-1 flex flex-col mx-auto w-[95%] mt-2 mb-2 overflow-hidden">
+        <div className="bg-white shadow rounded-lg w-full flex flex-col h-full overflow-hidden">
+          {/* Tabs navigation - fixed height */}
+          <div className="bg-white border-b border-gray-200 rounded-t-lg">
             <nav
               className="flex justify-between px-6 border-b border-gray-200 h-8"
               aria-label="Tabs"
@@ -715,57 +461,320 @@ export function AdjustmentScreen() {
               )}
             </nav>
           </div>
-          <div
-            className={cn(
-              "overflow-hidden rounded-b-lg transition-all duration-300 ease-in-out",
-              isHeaderCollapsed ? "h-[calc(90vh-7rem)]" : "h-[calc(90vh-7rem)]",
-            )}
-          >
-            <div className="h-full inventory-grid flex flex-col">
+
+          {/* Grid container - takes remaining height with scrolling */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-auto">
               <InventoryGrid
                 claimId={fileNumber}
                 mode={activeTab}
                 searchQuery={searchQuery}
-                className="inventory-grid flex-1"
+                className="inventory-grid"
               />
             </div>
+            {/* Fixed totals bar at bottom */}
+            <div className="flex-shrink-0">
+              <TotalsBar claimId={fileNumber} />
+            </div>
           </div>
-          <TotalsBar claimId={fileNumber} />
         </div>
-        <AddItemModal
-          isOpen={isAddItemModalOpen}
-          onClose={() => setIsAddItemModalOpen(false)}
-          claimId={fileNumber}
-          onItemAdded={() => {
-            refreshGrid();
-          }}
-        />
-        <BulkEditModal
-          isOpen={isBulkEditModalOpen}
-          onClose={() => setIsBulkEditModalOpen(false)}
-          selectedItems={selectedRows}
-          onUpdate={handleBulkEditComplete}
-        />
-        <BulkImportModal
-          isOpen={isBulkImportModalOpen}
-          onClose={() => setIsBulkImportModalOpen(false)}
-          claimId={fileNumber}
-          onImportComplete={() => {
-            refreshGrid();
-            toast.success("Items imported successfully");
-          }}
-        />
-        <FilterModal
-          isOpen={isFilterModalOpen}
-          onClose={() => setIsFilterModalOpen(false)}
-          claimId={fileNumber}
-        />
-        <ReportModal
-          isOpen={isReportModalOpen}
-          onClose={() => setIsReportModalOpen(false)}
-          claimId={fileNumber}
-        />
       </div>
-    </>
+
+      {/* Off-canvas menu */}
+      <div
+        className={cn(
+          "fixed top-24 bottom-32 right-0 w-96 bg-slate-200 shadow-lg transform transition-transform duration-300 ease-in-out z-50 rounded-2xl",
+          isOffCanvasOpen ? "translate-x-0" : "translate-x-full",
+        )}
+      >
+        <div className="h-full flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b">
+            <h1 className="text-lg font-semibold">Claim Details</h1>
+            <button
+              onClick={() => setIsOffCanvasOpen(false)}
+              className="text-gray-400 hover:text-gray-500"
+            >
+              <ChevronRightIcon className="h-8 w-8 text-white bg-blue-600 p-1 rounded-full stroke-2" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  Contact Information
+                </h3>
+                <div className="space-y-2">
+                  <p className="text-sm">
+                    <span className="font-medium">Email:</span> {claim.email}
+                  </p>
+                  <p className="text-sm">
+                    <span className="font-medium">Phone:</span>{" "}
+                    {claim.phone_number?.replace(
+                      /(\d{3})(\d{3})(\d{4})/,
+                      "($1) $2-$3",
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  Property
+                </h3>
+                <div className="space-y-1">
+                  <p className="text-sm">{claim.property_address}</p>
+                  <p className="text-sm">
+                    {[
+                      claim.property_city,
+                      claim.property_state,
+                      claim.property_zip_code,
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  Settings
+                </h3>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">
+                        Default Tax Rate
+                      </span>
+                      {isEditingTaxRate ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            pattern="[0-9]*[.]?[0-9]*"
+                            min="0"
+                            max="100"
+                            defaultValue={
+                              claim.default_tax_rate
+                                ? (claim.default_tax_rate * 100).toFixed(3)
+                                : ""
+                            }
+                            className="w-20 h-6 text-sm rounded border-gray-300 focus:border-blue-500 focus:ring-blue-500 text-right"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                handleTaxRateUpdate(e.target.value);
+                              } else if (e.key === "Escape") {
+                                setIsEditingTaxRate(false);
+                              }
+                            }}
+                            autoFocus
+                          />
+                          <span className="text-gray-500">%</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const input =
+                                e.target.parentElement.querySelector("input");
+                              handleTaxRateUpdate(input.value);
+                            }}
+                            className="text-xs bg-green-500 text-white px-2 py-0.5 rounded hover:bg-green-600"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setIsEditingTaxRate(false)}
+                            className="text-xs bg-gray-500 text-white px-2 py-0.5 rounded hover:bg-gray-600"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">
+                            {claim.default_tax_rate != null
+                              ? `${(claim.default_tax_rate * 100).toFixed(3)}%`
+                              : "Not set"}
+                          </span>
+                          <button
+                            onClick={() => setIsEditingTaxRate(true)}
+                            className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded hover:bg-blue-600"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Depreciation</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            try {
+                              const { error } = await supabase
+                                .from("claims")
+                                .update({
+                                  depreciation_applicable:
+                                    !claim.depreciation_applicable,
+                                  depreciation_recoverable:
+                                    claim.depreciation_applicable
+                                      ? false
+                                      : claim.depreciation_recoverable,
+                                })
+                                .eq("file_number", fileNumber);
+
+                              if (error) throw error;
+
+                              setClaim((prev) => ({
+                                ...prev,
+                                depreciation_applicable:
+                                  !prev.depreciation_applicable,
+                                depreciation_recoverable:
+                                  prev.depreciation_applicable
+                                    ? false
+                                    : prev.depreciation_recoverable,
+                              }));
+
+                              toast.success("Depreciation setting updated");
+                            } catch (err) {
+                              console.error(
+                                "Error updating depreciation setting:",
+                                err,
+                              );
+                              toast.error(
+                                "Failed to update depreciation setting",
+                              );
+                            }
+                          }}
+                          className={`px-2 py-1 text-xs font-semibold rounded ${
+                            claim.depreciation_applicable
+                              ? "bg-green-100 text-green-800 hover:bg-green-200"
+                              : "bg-red-100 text-red-800 hover:bg-red-200"
+                          }`}
+                        >
+                          {claim.depreciation_applicable
+                            ? "Applicable"
+                            : "Not Applicable"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {claim.depreciation_applicable && (
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">
+                          Recovery Tab
+                        </span>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const { error } = await supabase
+                                .from("claims")
+                                .update({
+                                  depreciation_recoverable:
+                                    !claim.depreciation_recoverable,
+                                })
+                                .eq("file_number", fileNumber);
+
+                              if (error) throw error;
+
+                              setClaim((prev) => ({
+                                ...prev,
+                                depreciation_recoverable:
+                                  !prev.depreciation_recoverable,
+                              }));
+
+                              toast.success("Recovery setting updated");
+                            } catch (err) {
+                              console.error(
+                                "Error updating recovery setting:",
+                                err,
+                              );
+                              toast.error("Failed to update recovery setting");
+                            }
+                          }}
+                          className={`px-2 py-1 text-xs font-semibold rounded ${
+                            claim.depreciation_recoverable
+                              ? "bg-purple-100 text-purple-800 hover:bg-purple-200"
+                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                          }`}
+                        >
+                          {claim.depreciation_recoverable
+                            ? "Enabled"
+                            : "Disabled"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-2">
+                  Active Users
+                </h3>
+                <div className="space-y-2">
+                  {activeParticipants.map((participant) => (
+                    <div
+                      key={participant.id}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <span>
+                        {participant.users.first_name}{" "}
+                        {participant.users.last_name}
+                      </span>
+                      <span className="text-gray-500">
+                        {participant.roles.name.replace("_", " ")}
+                      </span>
+                    </div>
+                  ))}
+                  <button className="w-full mt-2 px-3 py-1.5 text-sm bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center justify-center gap-1.5">
+                    <UserPlusIcon className="h-4 w-4" />
+                    Add Participant
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Modals */}
+      <AddItemModal
+        isOpen={isAddItemModalOpen}
+        onClose={() => setIsAddItemModalOpen(false)}
+        claimId={fileNumber}
+        onItemAdded={() => {
+          refreshGrid();
+        }}
+      />
+      <BulkEditModal
+        isOpen={isBulkEditModalOpen}
+        onClose={() => setIsBulkEditModalOpen(false)}
+        selectedItems={selectedRows}
+        onUpdate={handleBulkEditComplete}
+      />
+      <BulkImportModal
+        isOpen={isBulkImportModalOpen}
+        onClose={() => setIsBulkImportModalOpen(false)}
+        claimId={fileNumber}
+        onImportComplete={() => {
+          refreshGrid();
+          toast.success("Items imported successfully");
+        }}
+      />
+      <FilterModal
+        isOpen={isFilterModalOpen}
+        onClose={() => setIsFilterModalOpen(false)}
+        claimId={fileNumber}
+      />
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        claimId={fileNumber}
+      />
+    </div>
   );
 }

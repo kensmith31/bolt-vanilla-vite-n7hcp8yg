@@ -13,6 +13,7 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onUpdate }) {
   const [categories, setCategories] = useState([]);
   const [newRoom, setNewRoom] = useState("");
   const [showAddRoom, setShowAddRoom] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   // Reset field and value when modal closes
   useEffect(() => {
@@ -20,6 +21,7 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onUpdate }) {
       setField("");
       setValue("");
       setShowDeleteConfirm(false);
+      setProgress({ current: 0, total: 0 });
     }
   }, [isOpen]);
 
@@ -79,6 +81,7 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onUpdate }) {
     { id: "age", label: "Age", type: "number" },
     { id: "tax_rate", label: "Tax Rate", type: "tax_rate" },
     { id: "depreciation_percent", label: "Depreciation %", type: "number" },
+    { id: "accept_claimed", label: "Accept Claimed", type: "special" },
     {
       id: "condition",
       label: "Condition",
@@ -101,81 +104,45 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onUpdate }) {
     try {
       setLoading(true);
 
-      // Get current user information for change history
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const userId = user?.id;
+      const itemsArray = Array.from(selectedItems);
+      setProgress({ current: 0, total: itemsArray.length });
 
-      // Get user details for the change history
-      let userName = "Unknown User";
-      if (userId) {
-        const { data: userData } = await supabase
-          .from("users")
-          .select("first_name, last_name")
-          .eq("id", userId)
-          .single();
+      let successCount = 0;
+      let errorCount = 0;
 
-        if (userData) {
-          userName =
-            `${userData.first_name || ""} ${userData.last_name || ""}`.trim() ||
-            "Unknown User";
+      // Process each item individually to avoid transaction conflicts
+      for (let i = 0; i < itemsArray.length; i++) {
+        const itemId = itemsArray[i];
+        setProgress({ current: i + 1, total: itemsArray.length });
+
+        try {
+          // Delete the item - the trigger will handle history recording
+          const { error } = await supabase
+            .from("items")
+            .delete()
+            .eq("id", itemId);
+
+          if (error) {
+            console.error(`Error deleting item ${itemId}:`, error);
+            errorCount++;
+          } else {
+            successCount++;
+          }
+        } catch (itemErr) {
+          console.error(`Error processing delete for item ${itemId}:`, itemErr);
+          errorCount++;
         }
       }
 
-      // Get the items to be deleted for history records
-      const { data: itemsToDelete, error: fetchError } = await supabase
-        .from("items")
-        .select("id, item_number, description")
-        .in("id", Array.from(selectedItems));
-
-      if (fetchError) throw fetchError;
-
-      // First, delete any existing change history records for these items
-      // This resolves the foreign key constraint issue
-      const { error: deleteHistoryError } = await supabase
-        .from("item_change_history")
-        .delete()
-        .in("item_id", Array.from(selectedItems));
-
-      if (deleteHistoryError) {
-        console.error("Error deleting change history:", deleteHistoryError);
-        throw deleteHistoryError;
+      // Success message with details
+      if (errorCount === 0) {
+        toast.success(`Successfully deleted ${successCount} items`);
+      } else {
+        toast.success(
+          `Deleted ${successCount} items, failed to delete ${errorCount} items`,
+        );
       }
 
-      // Now delete the items after history records are removed
-      const { error } = await supabase
-        .from("items")
-        .delete()
-        .in("id", Array.from(selectedItems));
-
-      if (error) throw error;
-
-      // Record deletion in change history for each item
-      const changeHistoryEntries = itemsToDelete.map((item) => ({
-        item_id: item.id,
-        field_name: "deleted",
-        old_value: JSON.stringify({
-          item_number: item.item_number,
-          description: item.description,
-        }),
-        new_value: null,
-        changed_at: new Date().toISOString(),
-        user_id: userId || null,
-        user_name: userName,
-      }));
-
-      // Insert change history records
-      const { error: historyError } = await supabase
-        .from("item_change_history")
-        .insert(changeHistoryEntries);
-
-      if (historyError) {
-        console.error("Error recording deletion history:", historyError);
-        // Continue execution even if history recording fails
-      }
-
-      toast.success(`Deleted ${selectedItems.size} items`);
       onUpdate(); // Trigger refresh through parent component
       onClose();
     } catch (err) {
@@ -184,6 +151,7 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onUpdate }) {
     } finally {
       setLoading(false);
       setShowDeleteConfirm(false);
+      setProgress({ current: 0, total: 0 });
     }
   };
 
@@ -192,124 +160,197 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onUpdate }) {
 
     try {
       setLoading(true);
+      const itemsArray = Array.from(selectedItems);
+      setProgress({ current: 0, total: itemsArray.length });
 
-      // Convert value based on field type
+      // Special handling for Accept Claimed option
+      if (field === "accept_claimed") {
+        let successCount = 0;
+        let errorCount = 0;
+
+        // Process each item individually to avoid transaction conflicts
+        for (let i = 0; i < itemsArray.length; i++) {
+          const itemId = itemsArray[i];
+          setProgress({ current: i + 1, total: itemsArray.length });
+
+          try {
+            // Get the current value to know what we're updating
+            const { data: item, error: fetchError } = await supabase
+              .from("items")
+              .select("claimed_rcv")
+              .eq("id", itemId)
+              .single();
+
+            if (fetchError) {
+              console.error(`Error fetching item ${itemId}:`, fetchError);
+              errorCount++;
+              continue;
+            }
+
+            if (item.claimed_rcv) {
+              // Update the item - the trigger will handle history recording
+              const { error: updateError } = await supabase
+                .from("items")
+                .update({
+                  adjusted_rcv: item.claimed_rcv,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", itemId);
+
+              if (updateError) {
+                console.error(`Error updating item ${itemId}:`, updateError);
+                errorCount++;
+              } else {
+                successCount++;
+              }
+            }
+          } catch (itemErr) {
+            console.error(`Error processing item ${itemId}:`, itemErr);
+            errorCount++;
+          }
+        }
+
+        // Success message
+        if (errorCount === 0) {
+          toast.success(
+            `Updated ${successCount} items with claimed RCV values`,
+          );
+        } else {
+          toast.success(
+            `Updated ${successCount} items, failed to update ${errorCount} items`,
+          );
+        }
+
+        onUpdate(); // Trigger refresh through parent component
+        onClose();
+        return;
+      }
+
+      // For standard field updates
       let processedValue = value;
-      let updateData = {};
+      let fieldToUpdate = field;
+
+      // Process the value based on field type
       if (field === "age" || field === "quantity") {
         processedValue = parseFloat(value) || 0;
       } else if (field === "tax_rate") {
-        // Convert percentage to decimal with proper parsing
         processedValue = parseFloat(value) / 100;
-        updateData = {
-          tax_rate: processedValue,
-          tax_rate_is_custom: true,
-          updated_at: new Date().toISOString(),
-        };
+        fieldToUpdate = "tax_rate";
+        // Will handle tax_rate_is_custom separately
       } else if (field === "depreciation_percent") {
-        processedValue = parseFloat(value) / 100; // Convert percentage to decimal
-      } else if (field === "replacement_cost_applies" || field === "replaced") {
+        processedValue = parseFloat(value) / 100;
+      } else if (
+        field === "replacement_cost_applies" ||
+        field === "replaced" ||
+        field === "no_loss_or_damage" ||
+        field === "not_involved_in_claim" ||
+        field === "duplicate_item" ||
+        field === "cleaning_allowance"
+      ) {
         processedValue = value === "true";
       } else if (field === "category_id") {
         processedValue = parseInt(value);
       }
 
-      // If no special handling was needed, set the regular update data
-      if (Object.keys(updateData).length === 0) {
-        updateData = {
-          updated_at: new Date().toISOString(),
-        };
-        // Use explicit property assignment instead of computed property
-        if (field === "category_id") updateData.category_id = processedValue;
-        else if (field === "room") updateData.room = processedValue;
-        else if (field === "quantity") updateData.quantity = processedValue;
-        else if (field === "age") updateData.age = processedValue;
-        else if (field === "condition") updateData.condition = processedValue;
-        else if (field === "replacement_cost_applies")
-          updateData.replacement_cost_applies = processedValue;
-        else if (field === "replaced") updateData.replaced = processedValue;
-        else if (field === "no_loss_or_damage")
-          updateData.no_loss_or_damage = processedValue;
-        else if (field === "not_involved_in_claim")
-          updateData.not_involved_in_claim = processedValue;
-        else if (field === "duplicate_item")
-          updateData.duplicate_item = processedValue;
-        else if (field === "cleaning_allowance")
-          updateData.cleaning_allowance = processedValue;
-        else if (field === "depreciation_percent")
-          updateData.depreciation_percent = processedValue;
-      }
+      // Process items individually to avoid transaction conflicts
+      let successCount = 0;
+      let errorCount = 0;
 
-      // Get current user information for change history
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const userId = user?.id;
+      for (let i = 0; i < itemsArray.length; i++) {
+        const itemId = itemsArray[i];
+        setProgress({ current: i + 1, total: itemsArray.length });
 
-      // Get user details for the change history
-      let userName = "Unknown User";
-      if (userId) {
-        const { data: userData } = await supabase
-          .from("users")
-          .select("first_name, last_name")
-          .eq("id", userId)
-          .single();
+        try {
+          // Prepare update data for this specific item
+          let updateData = {
+            updated_at: new Date().toISOString(),
+          };
 
-        if (userData) {
-          userName =
-            `${userData.first_name || ""} ${userData.last_name || ""}`.trim() ||
-            "Unknown User";
+          // Handle special case for tax_rate
+          if (field === "tax_rate") {
+            updateData.tax_rate = processedValue;
+            updateData.tax_rate_is_custom = true;
+          } else {
+            // Set the field directly
+            updateData[fieldToUpdate] = processedValue;
+          }
+
+          // Special handling for status updates based on checkbox fields
+          if (field === "no_loss_or_damage" && processedValue === true) {
+            updateData.status = "in_review";
+            updateData.status_display = "No Loss/Damage";
+            updateData.not_involved_in_claim = false;
+            updateData.duplicate_item = false;
+            updateData.cleaning_allowance = false;
+            updateData.cleaning_allowance_amount = null;
+          } else if (
+            field === "not_involved_in_claim" &&
+            processedValue === true
+          ) {
+            updateData.status = "in_review";
+            updateData.status_display = "Not Involved in Claim";
+            updateData.no_loss_or_damage = false;
+            updateData.duplicate_item = false;
+            updateData.cleaning_allowance = false;
+            updateData.cleaning_allowance_amount = null;
+          } else if (field === "duplicate_item" && processedValue === true) {
+            updateData.status = "in_review";
+            updateData.status_display = "Duplicate";
+            updateData.no_loss_or_damage = false;
+            updateData.not_involved_in_claim = false;
+            updateData.cleaning_allowance = false;
+            updateData.cleaning_allowance_amount = null;
+          } else if (
+            field === "cleaning_allowance" &&
+            processedValue === true
+          ) {
+            updateData.status = "in_review";
+            updateData.status_display = "Clean Only";
+            updateData.no_loss_or_damage = false;
+            updateData.not_involved_in_claim = false;
+            updateData.duplicate_item = false;
+          } else if (
+            field === "cleaning_allowance" &&
+            processedValue === false
+          ) {
+            updateData.cleaning_allowance_amount = null;
+          }
+
+          // Execute the update for this specific item
+          const { error } = await supabase
+            .from("items")
+            .update(updateData)
+            .eq("id", itemId);
+
+          if (error) {
+            console.error(`Error updating item ${itemId}:`, error);
+            errorCount++;
+          } else {
+            successCount++;
+          }
+        } catch (itemErr) {
+          console.error(`Error processing item ${itemId}:`, itemErr);
+          errorCount++;
         }
       }
 
-      // First, get the current values of all selected items to record in change history
-      const { data: currentItems, error: fetchError } = await supabase
-        .from("items")
-        .select("id, " + field)
-        .in("id", Array.from(selectedItems));
-
-      if (fetchError) throw fetchError;
-
-      // Update all selected items
-      const { error } = await supabase
-        .from("items")
-        .update(updateData)
-        .in("id", Array.from(selectedItems));
-
-      if (error) throw error;
-
-      // Record changes in item_change_history for each item
-      const changeHistoryEntries = currentItems.map((item) => ({
-        item_id: item.id,
-        field_name: field,
-        old_value: item[field],
-        new_value: processedValue,
-        changed_at: new Date().toISOString(),
-        user_id: userId || null,
-        user_name: userName,
-      }));
-
-      // Insert change history records
-      const { error: historyError } = await supabase
-        .from("item_change_history")
-        .insert(changeHistoryEntries);
-
-      if (historyError) {
-        console.error("Error recording change history:", historyError);
-        // Continue execution even if history recording fails
+      // Success message with details
+      if (errorCount === 0) {
+        toast.success(`Successfully updated ${successCount} items`);
+      } else {
+        toast.success(
+          `Updated ${successCount} items, failed to update ${errorCount} items`,
+        );
       }
 
-      // Ensure the update takes effect before closing
-      setTimeout(() => {
-        toast.success(`Updated ${selectedItems.size} items`);
-        onUpdate(); // Trigger refresh through parent component
-        onClose();
-      }, 300);
+      onUpdate(); // Trigger refresh through parent component
+      onClose();
     } catch (err) {
       console.error("Error updating items:", err);
       toast.error("Failed to update items: " + err.message);
     } finally {
       setLoading(false);
+      setProgress({ current: 0, total: 0 });
     }
   };
 
@@ -432,6 +473,22 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onUpdate }) {
                               </div>
                             )}
                           </div>
+                        ) : field === "accept_claimed" ? (
+                          <div className="p-3 bg-blue-50 rounded-md">
+                            <p className="text-sm text-blue-700 mb-2">
+                              This will copy the Claimed RCV value to the
+                              Adjusted RCV field for all selected items.
+                            </p>
+                            <button
+                              type="submit"
+                              className="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
+                              disabled={loading}
+                            >
+                              {loading
+                                ? "Processing..."
+                                : "Apply to Selected Items"}
+                            </button>
+                          </div>
                         ) : fields.find((f) => f.id === field)?.type ===
                           "boolean" ? (
                           <select
@@ -495,6 +552,24 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onUpdate }) {
                       </div>
                     )}
 
+                    {/* Progress bar for bulk operations */}
+                    {loading && progress.total > 0 && (
+                      <div className="mt-2">
+                        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                          <div
+                            className="bg-blue-600 h-2.5 rounded-full"
+                            style={{
+                              width: `${(progress.current / progress.total) * 100}%`,
+                            }}
+                          ></div>
+                        </div>
+                        <p className="text-xs text-gray-500 text-center">
+                          Processing {progress.current} of {progress.total}{" "}
+                          items
+                        </p>
+                      </div>
+                    )}
+
                     <div className="mt-6 flex justify-between">
                       <button
                         type="button"
@@ -509,6 +584,7 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onUpdate }) {
                           type="button"
                           className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                           onClick={onClose}
+                          disabled={loading}
                         >
                           Cancel
                         </button>
@@ -579,11 +655,29 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onUpdate }) {
                     </p>
                   </div>
 
+                  {/* Progress bar for bulk operations */}
+                  {loading && progress.total > 0 && (
+                    <div className="mt-4">
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                        <div
+                          className="bg-red-600 h-2.5 rounded-full"
+                          style={{
+                            width: `${(progress.current / progress.total) * 100}%`,
+                          }}
+                        ></div>
+                      </div>
+                      <p className="text-xs text-gray-500 text-center">
+                        Deleting {progress.current} of {progress.total} items
+                      </p>
+                    </div>
+                  )}
+
                   <div className="mt-6 flex justify-end space-x-3">
                     <button
                       type="button"
                       className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
                       onClick={() => setShowDeleteConfirm(false)}
+                      disabled={loading}
                     >
                       Cancel
                     </button>
