@@ -231,7 +231,17 @@ export function ItemReceiptModal({ isOpen, onClose, item, onUploadComplete }) {
         toast.success("Amount updated successfully");
       }
 
-      onUploadComplete(updateData);
+      // Make sure we include all necessary fields in the update data that's passed back
+      // This ensures the grid gets updated with all the relevant information
+      const completeUpdateData = {
+        ...updateData,
+        // Ensure replacement_spent is properly included
+        replacement_spent: updateData.replacement_spent,
+        // Include holdback_due if it was calculated
+        holdback_due: updateData.holdback_due,
+      };
+
+      onUploadComplete(completeUpdateData);
       onClose();
     } catch (err) {
       console.error("Error updating item:", err);
